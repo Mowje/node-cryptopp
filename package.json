@@ -1,0 +1,29 @@
+{
+  "name": "cryptopp",
+  "version": "0.1.2",
+  "description": "Node.js static bindings for the Crypto++ library",
+  "main": "node-cryptopp.js",
+  "scripts": {
+    "test": "node test.js",
+    "install": "node-gyp rebuild"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BatikhSouri/node-cryptopp.git"
+  },
+  "keywords": [
+    "nodejs",
+    "node",
+    "cryptopp",
+    "lib",
+    "binding",
+    "c++",
+    "crypto++"
+  ],
+  "author": "Batikh Souri",
+  "license": "GPLv2",
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/BatikhSouri/node-cryptopp/issues"
+  }
+}
