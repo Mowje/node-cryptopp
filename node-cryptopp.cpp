@@ -259,6 +259,42 @@ Handle<Value> base64Decode(const Arguments& args){
 }
 
 /*
+* Generation of batikh
+*/
+
+Handle<Value> generateBytes(const Arguments& args){
+    HandleScope scope;
+    if (args.Length() == 1 || args.Length() == 2){
+        std::string encoding = "hex";
+        if (args.Length() == 2){
+            String::AsciiValue encodingVal(args[1]->ToString());
+            std::string encodingInput(*encodingVal);
+            if (encodingInput == "hex" || encodingInput == "base64"){
+                encoding = encodingInput;
+            } else {
+                ThrowException(v8::Exception::TypeError(String::New("When used, the \"encoding\" parameters must either be \"hex\" for hexadecimal or \"base64\" for Base64 encoding")));
+            }
+        }
+        Local<v8::Integer> numBytesVal = Local<v8::Integer>::Cast(args[0]);
+        int numBytes = numBytesVal->Value();
+        std::cout << "Number of bytes : " << numBytes << std::endl;
+        byte randomBytes[numBytes];
+        AutoSeededRandomPool prng;
+        prng.GenerateBlock(randomBytes, sizeof(randomBytes));
+        std::string randomString;
+        if (encoding == "hex"){
+            randomString = bufferHexEncode(randomBytes, sizeof(randomBytes));
+        } else {
+            randomString = bufferBase64Encode(randomBytes, sizeof(randomBytes));
+        }
+        return scope.Close(String::New(randomString.c_str()));
+    } else {
+        ThrowException(v8::Exception::TypeError(String::New("Invalid number of parameters. generateBytes methods takes only the number of bytes to be generated.")));
+        return scope.Close(Undefined());
+    }
+}
+
+/*
 *  ECIES key generation, encryption, decryption
 */
 
@@ -1272,6 +1308,8 @@ void init(Handle<Object> exports){
     base64Obj->Set(String::NewSymbol("encode"), FunctionTemplate::New(base64Encode)->GetFunction());
     base64Obj->Set(String::NewSymbol("decode"), FunctionTemplate::New(base64Decode)->GetFunction());
     exports->Set(String::NewSymbol("base64"), base64Obj);
+    // Setting the generateBytes method
+    exports->Set(String::NewSymbol("randomBytes"), FunctionTemplate::New(generateBytes)->GetFunction());
     //Setting the cryptopp.ecies object
     Local<Object> eciesObj = Object::New();
     Local<Object> eciesPrimeObj = Object::New();

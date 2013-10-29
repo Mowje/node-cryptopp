@@ -14,6 +14,11 @@ var base64Encoded = cryptopp.base64.encode(base64Test);
 var base64Decoded = cryptopp.base64.decode(base64Encoded);
 console.log('\n### Testing base64 encoding/decoding ###\nTest message : ' + base64Test + "\nEncoded : " + base64Encoded + "\nDecoded : " + base64Decoded);
 
+// Testing random byte generation
+var randomBytes1 = cryptopp.randomBytes(10);
+var randomBytes2 = cryptopp.randomBytes(10);
+console.log('\n### Testing random bytes generation ###\nRandom bytes : ' + cryptopp.hex.encode(randomBytes1) + '\nOther random bytes : ' + cryptopp.hex.encode(randomBytes2));
+
 // Testing RSA encryption/decryption
 var rsaTest = "testing RSA encryption/decryption";
 var rsaKeyPair = cryptopp.rsa.generateKeyPair(2048);
