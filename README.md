@@ -1,4 +1,4 @@
-node-cryptopp
+# node-cryptopp
 ================
 
 Node.js module that statically binds and simplifies the usage of the [Crypto++](http://cryptopp.com) comprehensive cryptography library.
@@ -13,7 +13,7 @@ Bindings for:
 
 All the crypto methods could de used in sync/async mode
 
-### General note
+## General note
 
 This library isn't well written in terms of error management. If the app crashes or throws some strange exception, it is probably because you did something wrong but in general it won't tell you what it is. (As of 18th september 2013)
 
@@ -23,11 +23,11 @@ Normally, each method described could be given a callback. If no callback is giv
 
 Also, keys, ciphertexts and signatures are all hex encoded. These data types should be kept "as-is" when passed to other methods.
 
-### Requirements
+## Requirements
 * [node.js](http://nodejs.org), obviously..
 * [Crypto++](http://cryptopp.com), that could be installed on Linux [rather easily](http://cryptopp.com/wiki/Linux#Distribution_Package)
 
-### Installation
+## Installation
 
 On installation, the node-cryptopp module compiles on your computer. Hence Crypto++ needs to be installed.
 
@@ -37,11 +37,11 @@ To install this module, simply
 npm install cryptopp
 ```
 
-### Usage
+## Usage
 
 The test.js script gives example usages for most implemented algorithms. So you can learn from there, in addition to learning from this page.
 
-#### RSA
+### RSA
 
 RSA encryption and signature schemes are supported by this module. The hash algorithm used in signatures is SHA256.
 
@@ -53,7 +53,7 @@ There are 5 methods for RSA :
 * __rsa.sign(message, modulus, privateExponent, publicExponent, [callback(signature)])__ : Signs the message with the given private key
 * __rsa.verify(message, signature, modulus, publicExponent, [callback(isValid)])__ : Tells whether the signature for the given message and public key is valid or not
 
-##### Example usage
+#### Example usage
 ```javascript
 var cryptopp = require('cryptopp');
 var rsaKeyPair = cryptopp.rsa.generateKeyPair(2048);
@@ -61,7 +61,7 @@ var cipher = cryptopp.rsa.encrypt('Testing RSA', rsaKeyPair.modulus, rsaKeyPair.
 var plaintext = cryptopp.rsa.decrypt(cipher, rsaKeyPair.modulus, rsaKeyPair.privateExponent);
 ```
 
-#### DSA
+### DSA
 
 There are 3 methods for DSA :
 
@@ -69,7 +69,7 @@ There are 3 methods for DSA :
 * __dsa.sign(message, primeField, divider, base, privateExponent, [callback(signature)])__ : Signs the given message using DSA with SHA1
 * __dsa.verify(message, signature, primeField, divider, base, publicElement, [callback(isValid)])__ : Verifies the signature
 
-##### Example usage
+#### Example usage
 ```javascript
 var cryptopp = require('cryptopp');
 var dsaKeyPair = cryptopp.dsa.generateKeyPair(2048);
@@ -78,7 +78,7 @@ var signature = cryptopp.dsa.sign(message, dsaKeyPair.primeField, dsaKeyPair.div
 var isValid = cryptopp.dsa.verify(message, signature, dsaKeyPair.primeField, dsaKeyPair.divider, dsaKeyPair.base, dsaKeyPair.publicElement);
 ```
 
-#### ECIES
+### ECIES
 
 Bindings have been written for ECIES on prime and binary fields.
 
@@ -90,7 +90,7 @@ For each of these fields, there are 3 methods available :
 * __ecies.[fieldType].encrypt(plainText, publicKey, curveName, [callback(cipherText)])__ : encrypts the plainText with the given publicKey on the given curve.
 * __ecies.[fieldType].decrypt(cipherText, privateKey, curveName, [callback(plainText)])__ : decrypts the cipherText with the given privateKey on the given curve.
 
-##### Example usage
+#### Example usage
 ```javascript
 var cryptopp = require('cryptopp');
 var keyPair = cryptopp.ecies.prime.generateKeyPair("secp256r1");
@@ -100,7 +100,7 @@ var plainText = cryptopp.ecies.prime.decrypt(cipher, keyPair.privateKey, keyPair
 
 To use ECIES on binary fields, just replace in the code above "prime" by "binary" and the curve name by a "binary curve" one.
 
-#### ECDSA
+### ECDSA
 
 Bindings have been written for ECDSA for prime and prime fields. However, there is a bug somewhere in the binary field version in the signing method (probably in hexStr<->PolynomialMod2 conversions, a bug I don't want to fix for now...). And as of now, the only hashing algorithm that can be used is SHA256. The ECDSA methods are reachable in a manner similar to ECIES. Here are ECDSA's methods :
 
@@ -108,7 +108,7 @@ Bindings have been written for ECDSA for prime and prime fields. However, there 
 * __ecdsa.[fieldType].sign(message, privateKey, curveName, [callback(signature)])__ : Returns the signature for the given message
 * __ecdsa.[fieldType].verify(message, signature, publicKey, curveName, [callback(isValid)])__ : A boolean is returned by this method; true when the signature is valid, false when it isn't.
 
-##### Example usage
+#### Example usage
 ```javascript
 var cryptopp = require('cryptopp');
 var keyPair = cryptopp.ecdsa.prime.generateKeyPair("secp256r1");
@@ -117,7 +117,7 @@ var signature = cryptopp.ecdsa.prime.sign(message, keyPair.privateKey, keyPair.c
 var isValid = cryptopp.ecdsa.prime.verify(message, signature, keyPair.publicKey, keyPair.curveName);
 ```
 
-#### ECDH
+### ECDH
 
 Binding have been written for ECDH for both type of fields. However, the ECDH version don't always give the same secret in the "agree" method. So don't use it... There is probably a bug somewhere in hexStr<->PolynomialMod2 conversion methods, but I don't want to fix it for now.
 
@@ -126,7 +126,7 @@ There are only 2 methods per field :
 * __ecdh.[fieldType].generateKeyPair(curveName, [callback(keyPair)])__ : The result is an object with 3 attributes : curveName, privateKey, publicKey
 * __ecdh.[fieldType].agree(yourPrivateKey, yourCounterpartsPublicKey, curveName, [callback(secret)])__ : Returns the common secret.
 
-##### Example usage
+#### Example usage
 ```javascript
 var cryptopp = require('cryptopp');
 var ecdhKeyPair1 = cryptopp.ecdh.prime.generateKeyPair('secp256r1');
@@ -135,7 +135,7 @@ var secret1 = cryptopp.ecdh.prime.agree(ecdhKeyPair1.privateKey, ecdhKeyPair2.pu
 var secret2 = cryptopp.ecdh.prime.agree(ecdhKeyPair2.privateKey, ecdhKeyPair1.publicKey, ecdhKeyPair2.curveName);
 ```
 
-#### Random bytes generation
+### Random bytes generation
 
 I found it useful to have a method that gives you random bytes, using the a generator from Crypto++ rather than ```Math.random()``` or whatever
 
@@ -143,7 +143,7 @@ __cryptopp.randomBytes(length, [encoding])__ :
 * length : number of bytes to be generated
 * encoding : optional, possible values are 'hex' for hexadecimal and 'base64' for Base64 encoding. Defaults to 'hex'.
 
-#### Hex and Base64 encodings
+### Hex and Base64 encodings
 
 Although there are already ways to encode/decode to hex/base64 in Node.js, I wrote bindings to the implementations in Crypto++
 
