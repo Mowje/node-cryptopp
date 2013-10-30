@@ -262,7 +262,7 @@ Handle<Value> base64Decode(const Arguments& args){
 * Generation of batikh
 */
 
-Handle<Value> generateBytes(const Arguments& args){
+Handle<Value> randomBytes(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
         std::string encoding = "hex";
@@ -276,12 +276,11 @@ Handle<Value> generateBytes(const Arguments& args){
             }
         }
         Local<v8::Integer> numBytesVal = Local<v8::Integer>::Cast(args[0]);
-        int numBytes = numBytesVal->Value();
-        std::cout << "Number of bytes : " << numBytes << std::endl;
+        unsigned int numBytes = numBytesVal->Value();
         byte randomBytes[numBytes];
         AutoSeededRandomPool prng;
         prng.GenerateBlock(randomBytes, sizeof(randomBytes));
-        std::string randomString;
+        std::string randomString = "";
         if (encoding == "hex"){
             randomString = bufferHexEncode(randomBytes, sizeof(randomBytes));
         } else {
@@ -1309,7 +1308,7 @@ void init(Handle<Object> exports){
     base64Obj->Set(String::NewSymbol("decode"), FunctionTemplate::New(base64Decode)->GetFunction());
     exports->Set(String::NewSymbol("base64"), base64Obj);
     // Setting the generateBytes method
-    exports->Set(String::NewSymbol("randomBytes"), FunctionTemplate::New(generateBytes)->GetFunction());
+    exports->Set(String::NewSymbol("randomBytes"), FunctionTemplate::New(randomBytes)->GetFunction());
     //Setting the cryptopp.ecies object
     Local<Object> eciesObj = Object::New();
     Local<Object> eciesPrimeObj = Object::New();

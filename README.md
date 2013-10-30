@@ -135,6 +135,14 @@ var secret1 = cryptopp.ecdh.prime.agree(ecdhKeyPair1.privateKey, ecdhKeyPair2.pu
 var secret2 = cryptopp.ecdh.prime.agree(ecdhKeyPair2.privateKey, ecdhKeyPair1.publicKey, ecdhKeyPair2.curveName);
 ```
 
+#### Random bytes generation
+
+I found it useful to have a method that gives you random bytes, using the a generator from Crypto++ rather than ```Math.random()``` or whatever
+
+__cryptopp.randomBytes(length, [encoding])__ :  
+* length : number of bytes to be generated
+* encoding : optional, possible values are 'hex' for hexadecimal and 'base64' for Base64 encoding. Defaults to 'hex'.
+
 #### Hex and Base64 encodings
 
 Although there are already ways to encode/decode to hex/base64 in Node.js, I wrote bindings to the implementations in Crypto++
