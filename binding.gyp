@@ -2,7 +2,7 @@
 	"targets" :[
 		{
 			"target_name": "cryptopp",
-			"sources": ["node-cryptopp.cpp"],
+			"sources": ["node-cryptopp.cpp", "keyring.cc"],
 			"include_dirs": ["/usr/include"],
 			"libraries": ["-lcryptopp"],
 			"library_dirs": ["/usr/lib"],

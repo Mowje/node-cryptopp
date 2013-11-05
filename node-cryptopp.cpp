@@ -3,6 +3,8 @@ Node.js static bindings to the Crypto++ library.
 Written by the Syrian watermelon
 */
 
+#define BUILDING_NODE_EXTENSION
+
 #include <cstdlib>
 #include <cmath>
 #include <string>
@@ -11,6 +13,9 @@ Written by the Syrian watermelon
 
 #include <v8.h>
 #include <node.h>
+
+//Loading the KeyRing class
+#include "keyring.h"
 
 //Importing AES
 #include <cryptopp/aes.h>
@@ -409,6 +414,17 @@ Handle<Value> eciesGenerateKeyPairP(const Arguments& args){
         return scope.Close(Undefined());
     }
 }
+
+/*map<string, string>* LLEciesGenerateKeyPairP(string curveName){
+        OID curve = getPCurveFromName(curveName);
+        //Initializing decryptor
+        AutoSeededRandomPool prng;
+        ECIES<ECP>::Decryptor d(prng, curve);
+        CryptoPP::Integer privateKey = d.GetKey().GetPrivateExponent();
+        const DL_GroupParameters_EC<ECP>& params = d.GetKey().GetGroupParameters();
+        const DL_FixedBasePrecomputation<ECPPoint>& bpc = params.GetBasePrecomputation();
+        const ECPPoint publicKey = bpc.Exponentiate(params.GetGroupPrecomputation(), d.GetKey().GetPrivateExponent());
+}*/
 
 //Method signature : ecies.binary.generateKeyPair(curveName, [callback(keyPair)]); returns keyPair objec if callback == undefined
 Handle<Value> eciesGenerateKeyPairB(const Arguments& args){
@@ -1297,6 +1313,8 @@ Handle<Value> dsaVerify(const Arguments& args){
 
 // Lib initialization method
 void init(Handle<Object> exports){
+    // Binding the keyManager class
+    KeyManager::Init(exports);
     // Setting the cryptopp.hex object
 	Local<Object> hexObj = Object::New();
 	hexObj->Set(String::NewSymbol("encode"), FunctionTemplate::New(hexEncode)->GetFunction());
