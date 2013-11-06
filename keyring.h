@@ -4,6 +4,11 @@
 #include <string>
 #include <map>
 
+#include <cryptopp/secblock.h>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/integer.h>
+using CryptoPP::Integer;
+
 #include <node.h>
 
 class KeyRing : public node::ObjectWrap{
@@ -12,20 +17,33 @@ public:
 	static void Init(v8::Handle<v8::Object> exports);
 
 private:
-	explicit KeyRing(string filename = "");
+	explicit KeyRing(std::string filename = "", std::string passphrase = "");
 	~KeyRing();
 	//Internal attributes
-	map<string, string>* keyPair;
-	string filename_;
-	//Internal methods
-	map<string, string>* loadKeyPair(string const& filename, string passphrase = "");
-	bool saveKeyPair(string const& filename, map<string, string>* keyPair, string passphrase = "");
+	map<std::string, std::string>* keyPair;
+	std::string filename_;
+	/*
+	* Internal methods
+	*/
+	map<std::string, std::string>* loadKeyPair(std::string const& filename, std::string passphrase = "");
+	bool saveKeyPair(std::string const& filename, map<std::string, std::string>* keyPair, std::string passphrase = "");
 	//Encode/Decoding the file buffer
-	map<string, string>* decodeBuffer(string const& fileBuffer);
-	string encodeBuffer(map<string, string>* keyPair);
+	map<std::string, std::string>* decodeBuffer(std::string const& fileBuffer);
+	std::string encodeBuffer(map<std::string, std::string>* keyPair);
 	//char / curveName conversions
-	char getCurveID(string curveName);
-	string getCurveName(char curveID);
+	char getCurveID(std::string curveName);
+	std::string getCurveName(char curveID);
+	//String / Integer <-> hex conversions
+	std::string bufferHexEncode(byte buffer[], unsigned int size);
+	std::string strHexEncode(std::string const& s);
+	void bufferHexDecode(std::string const& e, byte buffer[], unsigned int bufferSize);
+	std::string strHexDecode(std::string const& e);
+	std::string IntegerToHexStr(CryptoPP::Integer const& i);
+	CryptoPP::Integer HexStrToInteger(std::string const& hexStr);
+	//PBKDF2 / AES file encryption / decryption
+	void encryptFile(std::string const& filename, std::string const& content, std::string const& passphrase, unsigned int pbkdfIterations = 8192, int aesKeySize = 256);
+	std::string decryptFile(std::string const& filename, std::string const& passphrase, unsigned int pbkdfIterations = 8192, int aesKeySize = 256);
+	bool doesFileExist(std::string const& filename);
 
 	//JS Methods
 	static v8::Handle<v8::Value> New(const v8::Arguments& args);

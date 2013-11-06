@@ -1,23 +1,102 @@
 #define BUILDING_NODE_EXTENSION
 
+//Std imports
 #include <string>
 #include <iostream>
 #include <exception>
 #include <stdexcept>
 #include <fstream>
 #include <sstream>
+#include <utility>
 
+//Crypto++ imports
+#include <cryptopp/base64.h>
+using CryptoPP::Base64Encoder;
+using CryptoPP::Base64Decoder;
+
+#include <cryptopp/hex.h>
+using CryptoPP::HexEncoder;
+using CryptoPP::HexDecoder;
+
+#include <cryptopp/filters.h>
+using CryptoPP::StringSource;
+using CryptoPP::StringSink;
+using CryptoPP::ArraySink;
+using CryptoPP::SignerFilter;
+using CryptoPP::SignatureVerificationFilter;
+using CryptoPP::StreamTransformationFilter;
+using CryptoPP::PK_EncryptorFilter;
+using CryptoPP::PK_DecryptorFilter;
+
+#include <cryptopp/sha.h>
+using CryptoPP::SHA1;
+using CryptoPP::SHA256;
+
+#include <cryptopp/eccrypto.h>
+using CryptoPP::ECP;
+using CryptoPP::EC2N;
+using CryptoPP::ECPPoint;
+using CryptoPP::EC2NPoint;
+using CryptoPP::ECDSA;
+using CryptoPP::ECIES;
+using CryptoPP::DL_GroupParameters_EC;
+using CryptoPP::DL_GroupPrecomputation;
+using CryptoPP::DL_FixedBasePrecomputation;
+
+#include <cryptopp/rsa.h>
+using CryptoPP::RSA;
+using CryptoPP::RSAFunction;
+using CryptoPP::InvertibleRSAFunction;
+using CryptoPP::RSASS;
+using CryptoPP::RSAES_OAEP_SHA_Encryptor;
+using CryptoPP::RSAES_OAEP_SHA_Decryptor;
+
+#include <cryptopp/pssr.h>
+using CryptoPP::PSS;
+
+#include <cryptopp/dsa.h>
+using CryptoPP::DSA;
+
+#include <cryptopp/osrng.h>
+using CryptoPP::AutoSeededRandomPool;
+
+#include <cryptopp/asn.h>
+using CryptoPP::OID;
+#include <cryptopp/oids.h>
+
+#include <cryptopp/secblock.h>
+using CryptoPP::SecByteBlock;
+
+#include <cryptopp/pwdbased.h>
+using CryptoPP::PKCS5_PBKDF2_HMAC;
+
+#include <cryptopp/aes.h>
+using CryptoPP::AES;
+
+#include <cryptopp/modes.h>
+using CryptoPP::CFB_Mode;
+
+//Node and class headers import
 #include <node.h>
 #include "keyring.h"
 
 using namespace v8;
+using namespace std;
 
 Persistent<Function> KeyRing::constructor;
 
-KeyRing::KeyRing(string filename) : filename_(filename), keyPair(0){
+KeyRing::KeyRing(string filename, string passphrase) : filename_(filename), keyPair(0){
 	//If filename is not null, try to load the key at the given filename
 	if (filename != ""){
-
+		if (!doesFileExist(filename)){
+			//Throw a V8 error, I don't know how
+			return;
+		}
+		if (passphrase != ""){
+			loadKeyPair(filename, passphrase);
+		} else {
+			loadKeyPair(filename);
+		}
 	}
 }
 
@@ -83,6 +162,7 @@ Handle<Value> KeyRing::Decrypt(const Arguments& args){
 	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
 	if (instance->keyPair == 0){
 		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
+		return scope.Close(Undefined());
 	}
 	//Checking the key type
 }
@@ -92,7 +172,12 @@ Handle<Value> KeyRing::Decrypt(const Arguments& args){
 * String message
 */
 Handle<Value> KeyRing::Sign(const Arguments& args){
-
+	HandleScope scope;
+	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
+	if (instance->keyPair == 0){
+		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
+		return scope.Close(Undefined());
+	}
 }
 
 /*
@@ -100,12 +185,22 @@ Handle<Value> KeyRing::Sign(const Arguments& args){
 * Object pubKeyInfo
 */
 Handle<Value> KeyRing::Agree(const Arguments& args){
-
+	HandleScope scope;
+	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
+	if (instance->keyPair == 0){
+		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
+		return scope.Close(Undefined());
+	}
 }
 
 // No params
 Handle<Value> KeyRing::PublicKeyInfo(const Arguments& args){
-
+	HandleScope scope;
+	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
+	if (instance->keyPair == 0){
+		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
+		return scope.Close(Undefined());
+	}
 }
 
 /*
@@ -121,7 +216,27 @@ Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
 * String filename, String passphrase [optional]
 */
 Handle<Value> KeyRing::Load(const Arguments& args){
-
+	HandleScope scope;
+	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
+	if (args.Length() == 1 || args.Length() == 2){
+		String::Utf8Value filenameVal(args[0]->ToString());
+		string filename(*filenameVal);
+		if (!doesFileExist(filename)){
+			ThrowException(v8::Exception::TypeError("The given file doesn't exist."));
+			return scope.Close(Undefined());
+		}
+		//If I put a try block here, what kind of exceptions should I catch. I simply don't get it.
+		if (args.Length() == 1){ //If no passphrase is given
+			instance->keyPair = loadKeyPair(filename);
+		} else { //If a passphrase is given
+			String::Utf8Value passphraseVal(args[1]->ToString());
+			string passphrase(*passphraseVal);
+			instance->keyPair = loadKeyPair(filename, passphrase);
+		}
+	} else {
+		ThrowException(v8::Exception::TypeError(String::New("Invalid number of parameters")));
+	}
+	return scope.Close(Undefined());
 }
 
 /*
@@ -129,7 +244,27 @@ Handle<Value> KeyRing::Load(const Arguments& args){
 * String filename, String passphrase [optional]
 */
 Handle<Value> KeyRing::Save(const Arguments& args){
-
+	HandleScope scope;
+	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
+	if (instance->keyPair == 0){
+		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
+		return scope.Close(Undefined());
+	}
+	if (args.Length() == 1 || args.Length() == 2){
+		String::Utf8Value filenameVal(args[0]->ToString());
+		std::string filename(*filenameVal);
+		if (args.Length() == 1){
+			saveKeyPair(filename, instance->keyPair);
+		} else {
+			String::Utf8Value passphraseVal(args[1]->ToString());
+			std::string passphrase(*passphraseVal);
+			saveKeyPair(filename, instance->keyPair, passphrase);
+		}
+		return scope.Close(Undefined());
+	} else {
+		ThrowException(v8::Exception::TypeError(String::New("Invalid number of parameters")));
+		return scope.Close(Undefined());
+	}
 }
 
 //No params
@@ -144,14 +279,35 @@ Handle<Value> KeyRing::Clear(const Arguments& args){
 }
 
 map<string, string>* KeyRing::loadKeyPair(string const& filename, string passphrase){
-	fstream file(filename.c_str(), std::ios::in);
+	string fileContent;
 	if (passphrase != ""){ //If passphrase is defined, then decrypt file
-
+		fileContent = decryptFile(filename, passphrase);
+	} else {
+		fstream file(filename.c_str(), ios::in);
+		getline(file, fileContent);
+		fileContent = strHexDecode(fileContent);
 	}
+	map<string, string>* keyPair = decodeBuffer(fileContent);
+	return keyPair;
 }
 
 bool KeyRing::saveKeyPair(string const& filename, map<string, string>* keyPair, string passphrase){
+	std::string buffer = encodeBuffer(keyPair);
+	if (passphrase != ""){
+		encryptFile(filename, buffer, passphrase);
+	} else {
+		fstream file(filename, std::ios::out | std::ios::trunc);
+		file << strHexEncode(buffer);
+		file.close();
+	}
+	return true;
+}
 
+bool KeyRing::doesFileExist(std::string const& filename){
+	fstream file(filename.c_str, std::ios::in);
+	bool isGood = file.good();
+	file.close();
+	return isGood;
 }
 
 map<string, string>* KeyRing::decodeBuffer(string const& fileBuffer){
@@ -285,7 +441,7 @@ string KeyRing::encodeBuffer(map<string, string>* keyPair){
 		//Checking key pair integrality
 		string params[] = {"curveName", "publicKeyX", "publicKeyY", "privateKey"};
 		for (int i = 0; i < 4; i++){
-			if (!keyPair->count(params[i])) throw new runtime_error("Missing " + params[i] + " parameter");
+			if (!keyPair->count(params[i])) throw new runtime_error("Missing parameter : " + params[i]);
 		}
 		//Writing key type
 		if (keyType == "ecdsa"){
@@ -310,12 +466,76 @@ string KeyRing::encodeBuffer(map<string, string>* keyPair){
 		buffer << (char) privateKey.length();
 		buffer << privateKey;
 	} else if (keyType == "rsa"){
-		
+		//Checking key pair integrality
+		string params[] = {"modulus", "publicExponent", "privateExponent"};
+		for (int i = 0; i < 3; i++){
+			if (!keyPair->count(params[i])) throw new runtime_error("Missing parameter : " + params[i]);
+		}
+		//Writing the key type
+		buffer << (char) 0x01;
+		string modulus = keyPair->at("modulus"), publicExponent = keyPair->at("publicExponent"), privateExponent = keyPair->at("privateExponent");
+		//Writing the modulus
+		buffer << (char) (modulus.length() >> 8);
+		buffer << (char) modulus.length();
+		buffer << modulus;
+		//Writing the public exponent
+		buffer << (char) (publicExponent.length() >> 8);
+		buffer << (char) publicExponent.length();
+		buffer << publicExponent;
+		//Writing the private exponent
+		buffer << (char) (privateExponent.length() >> 8);
+		buffer << (char) privateExponent.length();
+		buffer << privateExponent;
 	} else if (keyType == "dsa"){
-
+		//Checking key pair integrality
+		string params[] = {"primeField", "divider", "base", "publicElement", "privateExponent"};
+		for (int i = 0; i < 5; i++){
+			if (!keyPair->at(params[i])) throw new runtime_error("Missing parameter : " + params[i]);
+		}
+		//Writing the key type
+		buffer << (char) 0x02;
+		string primeField = keyPair->at("primeField"), divder = keyPair->at("divider"), base = keyPair->at("base"), publicElement = keyPair->at("publicElement"), privateExponent = keyPair->at("privateExponent");
+		//Writing the primeField
+		buffer << (char) (primeField.length() >> 8);
+		buffer << (char) primeField.length();
+		buffer << primeField;
+		//Writing the divider
+		buffer << (char) (divider.length() >> 8);
+		buffer << (char) divider.length();
+		buffer << divider;
+		//Writing the base
+		buffer << (char) (base.length() >> 8);
+		buffer << (char) base.length();
+		buffer << base;
+		//Writing the publicElement
+		buffer << (char) (publicElement.length() >> 8);
+		buffer << (char) publicElement.length();
+		buffer << publicElement;
+		//Writing the privateExponent
+		buffer << (char) (privateExponent.length() >> 8);
+		buffer << (char) privateExponent.length();
+		buffer << privateExponent;
 	} else if (keyType == "ecdh"){
-
+		string params[] = {"curveName", "publicKey", "privateKey"};
+		for (int i = 0; i < 3; i++){
+			if (!keyPair->count(params[i])) throw new runtime_error("Missing parameter : " + params[i]);
+		}
+		//Writing the key type
+		buffer << (char) 0x03;
+		string curveName = keyPair->at("curveName"), publicKey = keyPair->at("publicKey"), privateKey = keyPair->at("privateKey");
+		//Writing curveID
+		char curveID = getCurveID(curveName);
+		buffer << curveID;
+		//Writing the public key
+		buffer << (char) (publicKey.length() >> 8);
+		buffer << (char) publicKey.length();
+		buffer << publicKey;
+		//Writing the private key
+		buffer << (char) (privateKey.length() >> 8);
+		buffer << (char) privateKey.length();
+		buffer << privateKey;
 	} else throw new runtime_error("Unknown key type");
+	return buffer.str();
 }
 
 char KeyRing::getCurveID(string curveName){
@@ -392,4 +612,107 @@ string KeyRing::getCurveName(char curveID){
     else if (curveID == 0x90) return "sect571r1";
     else if (curveID == 0x91) return "sect571k1";
     else throw new runtime_error("Unknown curve ID");
+}
+
+std::string KeyRing::bufferHexEncode(byte buffer[], unsigned int size){
+	std::string encoded;
+	StringSource(buffer, size, true, new HexEncoder(new StringSink(encoded)));
+	return encoded;
+}
+
+std::string KeyRing::strHexEncode(std::string const& s){
+	std::string encoded;
+	StringSource(s, true, new HexEncoder(new StringSink(encoded)));
+	return encoded;
+}
+
+void KeyRing::bufferHexDecode(std::string const& e, byte buffer[], unsigned int bufferSize){
+	StringSource(e, true, new HexDecoder(new ArraySink(buffer, bufferSize)));
+}
+
+std::string KeyRing::strHexDecode(std::string const& e){
+	std::string decoded;
+	StringSource(e, true, new HexDecoder(new StringSink(decoded)));
+	return decoded;
+}
+
+std::string KeyRing::IntegerToHexStr(CryptoPP::Integer const& i){
+	byte bigEndian[i.MinEncodedSize()];
+	i.Encode(bigEndian, sizeof(bigEndian));
+	return bufferHexEncode(bigEndian, sizeof(bigEndian));
+}
+
+CryptoPP::Integer KeyRing::HexStrToInteger(std::string const& hexStr){
+	byte buffer[hexStr.size() / 2];
+	bufferHexDecode(hexStr, buffer, sizeof(buffer));
+	CryptoPP::Integer i;
+	i.Decode(buffer, sizeof(buffer));
+	return i;
+}
+
+void KeyRing::encryptFile(std::string const& filename, std::string const& content, std::string const& passphrase, unsigned int pbkdfIterations, int aesKeySize){
+	if (!(aesKeySize == 256 || aesKeySize == 192 || aesKeySize == 128)) throw new runtime_error("AES key size must be either 128, 192 or 256");
+	aesKeySize /= 8;
+	AutoSeededRandomPool prng;
+	//Generating pbkdf salt
+	byte salt[16];
+	prng.GenerateBlock(salt, sizeof(salt));
+	//Copying passphrase to byte array
+	byte passphraseArray[passphrase.size()];
+	for (int i = 0; i < sizeof(passphraseArray); i++){
+		passphraseArray[i] = passphrase[i];
+	}
+	//Calculating key
+	byte key[aesKeySize];
+	PKCS5_PBKDF2_HMAC<SHA1> derivation;
+	derivation.DeriveKey(key, sizeof(key), 0 passphraseArray, sizeof(passphraseArray), salt, sizeof(salt), pbkdfIterations);
+	//Generating an IV
+	byte iv[AES::BLOCKSIZE];
+	prng.GenerateBlock(iv, sizeof(iv));
+	//Encrypt content
+	CFB_Mode<AES>::Encryption e;
+	e.SetKeyWithIV(key, sizeof(key), iv);
+	string encrypted;
+	StringSource(content, true, new StreamTransformationFilter(e, new StringSink(encrypted)));
+	//Opening file and writing content
+	fstream file(filename.c_str(), ios::out | ios::trunc);
+	file << bufferHexEncode(salt, sizeof(salt));
+	file << std::endl;
+	file << bufferHexEncode(iv, sizeof(iv));
+	file << std::endl;
+	file << strHexEncode(encrypted);
+	file.close();
+}
+
+std::string KeyRing::decryptFile(std::string const& filename, std::string const& passphrase, unsigned int pbkdfIterations, int aesKeySize){
+	//Checking whether aes key size is valid or not
+	if (!(aesKeySize == 256 || aesKeySize == 192 || aesKeySize == 128)) throw new runtime_error("Invalid key size. Must be either 128, 192 or 256 bits");
+	aesKeySize /= 8;
+	//Copying passphrase to an array
+	byte passphraseArray[passphrase.size()];
+	for (int i = 0; i < sizeof(passphraseArray); i++){
+		passphraseArray[i] = passphrase[i];
+	}
+	//Opening file, reading pbkdf and AES iv
+	fstream file(filename.c_str(), ios::in);
+	string saltStr, ivStr, encryptedStr;
+	getline(file, saltStr);
+	getline(file, ivStr);
+	getline(file, encryptedStr);
+	file.close();
+	//Decodign hex of salt, iv and encrypted content
+	byte iv[ivStr.size() / 2], salt[saltStr.size() / 2];
+	bufferHexDecode(saltStr, salt, sizeof(salt));
+	bufferHexDecode(ivStr, iv, sizeof(iv));
+	encryptedStr = strHexDecode(encryptedStr);
+	//Calculating key
+	byte key[aesKeySize];
+	PKCS5_PBKDF2_HMAC<SHA1> derivation;
+	derivation.DeriveKey(key, sizeof(key), 0, passphraseArray, sizeof(passphraseArray), salt, sizeof(salt), pbkdfIterations);
+	//Decrypting content
+	CFB_Mode<AES>::Decryption d;
+	d.SetKeyWithIV(key, sizeof(key), iv);
+	string decrypted;
+	StringSource(encryptedStr, true, new StreamTransformationFilter(d, new StringSink(decrypted)));
+	return decrypted;
 }
