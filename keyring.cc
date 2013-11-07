@@ -208,7 +208,70 @@ Handle<Value> KeyRing::PublicKeyInfo(const Arguments& args){
 * String keyType, Number/String keyOptions, String filename [optional], String passphrase [optional]
 */
 Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
+	HandleScope scope;
+	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
+	if (args.Length() < 2){
+		ThrowException(Exception::TypeError(String::New("Invalid number of parameters. You must at least specify the key type and related paremters like key size or curve name")));
+		return scope.Close();
+	}
+	String::Utf8Value algoTypeVal(args[0]->ToString());
+	std::string algoType(*algoTypeVal);
+	//Checking that the key type is supported, otherwise throw an exception
+	if (!(algoType == "rsa" || algoType == "dsa" || algoType == "ecdsa" || algoType == "ecies" || algoType == "ecdh")){
+		ThrowException(Exception::TypeError(String::New("Invalid algo type.")));
+		return scope.Close(Undefined());
+	}
+	map<string, string>* newKeyPair = new map<string, string>();
+	if (instance->keyPair != 0){ //Delete the last key map, if there is one
+		delete instance->keyPair;
+		instance->keyPair = 0;
+	}
+	instance->keyPair = newKeyPair;
+	if (algoType == "rsa"){
+		Local<v8::Integer> keySizeVal = Local<v8::Integer>::Cast(args[1]);
+		int keySize = keySizeVal->Value();
+		if (!(keySize >= 1024 && keySize <= 16384)){
+			ThrowException(v8::Exception::TypeError(String::New("Invalid key size. Must be between 1024 and 16384 bits")));
+			return scope.Close(Undefined());
+		}
+		//Generating the key pair
+		AutoSeededRandomPool prng;
+		InvertibleRSAFunction keyPairParams;
+		keyPairParams.GenerateRandomWithKeySize(prng, keySize);
+		//Build the key map
+		newKeyPair->insert(make_pair("keyType", "rsa"));
+		newKeyPair->insert(make_pair("modulus", IntegerToHexStr(keyPairParams.GetModulus())));
+		newKeyPair->insert(make_pair("publicExponent", IntegerToHexStr(keyPairParams.GetPublicExponent())));
+		newKeyPair->insert(make_pair("privateExponent", IntegerToHexStr(keyPairParams.GetPrivateExponent())));
+	} else if (algoType == "dsa"){
+		Local<v8::Integer> keySizeVal = Local<v8::Integer>::Cast(args[1]);
+		int keySize = keySizeVal->Value();
+		if (!(keySize >= 1024 && keySize <= 16384)){
+			ThrowException(v8::Exception::TypeError(String::New("Invalid key size. Must be between 1024 aqnd 16384 bits")));
+			return scope.Close(Undefined());
+		}
+		//Generating key pair
+		AutoSeededRandomPool prng;
+		DSA::PrivateKey privateKey;
+		privateKey.GenerateRandomWithKeySize(prng, keySize);
+		DSA::PublicKey publicKey;
+		privateKey.MakePublicKey(publicKey);
+		//Building the key map
+		newKeyPair->insert(make_pair("keyType", "dsa"));
+		newKeyPair->insert(make_pair("primeField", IntegerToHexStr(privateKey.GetGroupParameters().GetModulus())));
+		newKeyPair->insert(make_pair("divider", IntegerToHexStr(privateKey.GetGroupParameters().GetSubgroupOrder())));
+		newKeyPair->insert(make_pair("base", IntegerToHexStr(privateKey.GetGroupParameters().GetSubgroupGenerator())));
+		newKeyPair->insert(make_pair("privateExponent", IntegerToHexStr(privateKey.GetPrivateExponent())));
+		newKeyPair->insert(make_pair("publicElement", IntegerToHexStr(publicKey.GetPublicElement())));
+	} else if (algoType == "ecies"){
+		String::AsciiValue curveNameVal(args[1]->ToString());
+	} else if (algoType == "ecdsa"){
 
+	} else if (algoType == "ecdh"){
+
+	} else {
+		
+	}
 }
 
 /*
