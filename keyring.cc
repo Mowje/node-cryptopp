@@ -39,6 +39,7 @@ using CryptoPP::ECPPoint;
 using CryptoPP::EC2NPoint;
 using CryptoPP::ECDSA;
 using CryptoPP::ECIES;
+using CryptoPP::ECDH;
 using CryptoPP::DL_GroupParameters_EC;
 using CryptoPP::DL_GroupPrecomputation;
 using CryptoPP::DL_FixedBasePrecomputation;
@@ -59,6 +60,7 @@ using CryptoPP::DSA;
 
 #include <cryptopp/osrng.h>
 using CryptoPP::AutoSeededRandomPool;
+using CryptoPP::AutoSeededX917RNG;
 
 #include <cryptopp/asn.h>
 using CryptoPP::OID;
@@ -134,7 +136,7 @@ Handle<Value> KeyRing::New(const Arguments& args){
 	HandleScope scope;
 	if (args.IsConstructCall()){
 		//Invoked as a constructor
-		string filename = args[0]->IsUndefined() ? "" : args[0]->ToString();
+		string filename = args[0]->IsUndefined() ? "" : string(*(args[0]->ToString()));
 		KeyRing* newInstance = new KeyRing(filename);
 		newInstance->Wrap(args.This());
 		return args.This();
@@ -201,6 +203,7 @@ Handle<Value> KeyRing::PublicKeyInfo(const Arguments& args){
 		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
 		return scope.Close(Undefined());
 	}
+	return scope.Close(instance->PPublicKeyInfo());
 }
 
 /*
@@ -212,7 +215,7 @@ Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
 	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
 	if (args.Length() < 2){
 		ThrowException(Exception::TypeError(String::New("Invalid number of parameters. You must at least specify the key type and related paremters like key size or curve name")));
-		return scope.Close();
+		return scope.Close(Undefined());
 	}
 	String::Utf8Value algoTypeVal(args[0]->ToString());
 	std::string algoType(*algoTypeVal);
@@ -221,12 +224,14 @@ Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
 		ThrowException(Exception::TypeError(String::New("Invalid algo type.")));
 		return scope.Close(Undefined());
 	}
+	//Instanciating a new key map object
 	map<string, string>* newKeyPair = new map<string, string>();
 	if (instance->keyPair != 0){ //Delete the last key map, if there is one
 		delete instance->keyPair;
 		instance->keyPair = 0;
 	}
 	instance->keyPair = newKeyPair;
+	//Declaring the public key object
 	if (algoType == "rsa"){
 		Local<v8::Integer> keySizeVal = Local<v8::Integer>::Cast(args[1]);
 		int keySize = keySizeVal->Value();
@@ -264,14 +269,134 @@ Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
 		newKeyPair->insert(make_pair("privateExponent", IntegerToHexStr(privateKey.GetPrivateExponent())));
 		newKeyPair->insert(make_pair("publicElement", IntegerToHexStr(publicKey.GetPublicElement())));
 	} else if (algoType == "ecies"){
+		//Getting curve name and checking validity
 		String::AsciiValue curveNameVal(args[1]->ToString());
+		std::string curveName(*curveNameVal);
+		if (curveName.find("sect") == 0){
+			ThrowException(Exception::TypeError(String::New("Binary curves are not supported yet. Please use prime curves.")));
+			return scope.Close(Undefined());
+		}
+		OID curve;
+		try {
+			curve = getPCurveFromName(curveName);
+		} catch (runtime_error* e){
+			ThrowException(Exception::TypeError(String::New("Unknown curve")));
+			return scope.Close(Undefined());
+		}
+		//Generating the key pair
+		AutoSeededRandomPool prng;
+		ECIES<ECP>::Decryptor d(prng, curve);
+		CryptoPP::Integer privateKey = d.GetKey().GetPrivateExponent();
+		const DL_GroupParameters_EC<ECP>& params = d.GetKey().GetGroupParameters();
+		const DL_FixedBasePrecomputation<ECPPoint>& bpc = params.GetBasePrecomputation();
+		const ECPPoint publicKey = bpc.Exponentiate(params.GetGroupPrecomputation(), d.GetKey().GetPrivateExponent());
+		//Building the key map
+		newKeyPair->insert(make_pair("keyType", "ecies"));
+		newKeyPair->insert(make_pair("curveName", curveName));
+		newKeyPair->insert(make_pair("publicKeyX", IntegerToHexStr(publicKey.x)));
+		newKeyPair->insert(make_pair("publicKeyY", IntegerToHexStr(publicKey.y)));
+		newKeyPair->insert(make_pair("privateKey", IntegerToHexStr(privateKey)));
 	} else if (algoType == "ecdsa"){
-
+		//Getting curve name and checking validity
+		String::AsciiValue curveNameVal(args[1]->ToString());
+		std::string curveName(*curveNameVal);
+		if (curveName.find("sect") == 0){
+			ThrowException(Exception::TypeError(String::New("Binary curves are not supported yet. Please use prime curves.")));
+			return scope.Close(Undefined());
+		}
+		OID curve;
+		try {
+			curve = getPCurveFromName(curveName);
+		} catch (runtime_error* e){
+			ThrowException(Exception::TypeError(String::New("Unknown curve")));
+			return scope.Close(Undefined());
+		}
+		//Generating the key pair
+		AutoSeededRandomPool prng;
+		ECDSA<ECP, SHA256>::PrivateKey privateKey;
+		ECDSA<ECP, SHA256>::PublicKey publicKey;
+		privateKey.Initialize(prng, curve);
+		privateKey.MakePublicKey(publicKey);
+		const ECPPoint publicPoint(publicKey.GetPublicElement());
+		//Building the key map
+		newKeyPair->insert(make_pair("keyType", "ecdsa"));
+		newKeyPair->insert(make_pair("curveName", curveName));
+		newKeyPair->insert(make_pair("publicKeyX", IntegerToHexStr(publicPoint.x)));
+		newKeyPair->insert(make_pair("publicKeyY", IntegerToHexStr(publicPoint.y)));
+		newKeyPair->insert(make_pair("privateKey", IntegerToHexStr(privateKey.GetPrivateExponent())));
 	} else if (algoType == "ecdh"){
-
-	} else {
-		
+		//Getting curve name and checking validity
+		String::AsciiValue curveNameVal(args[1]->ToString());
+		std::string curveName(*curveNameVal);
+		if (curveName.find("sect") == 0){
+			ThrowException(Exception::TypeError(String::New("Binary curves are not supported yet. Please use prime curves.")));
+			return scope.Close(Undefined());
+		}
+		OID curve;
+		try {
+			curve = getPCurveFromName(curveName);
+		} catch (runtime_error* e){
+			ThrowException(Exception::TypeError(String::New("Unknown curve")));
+			return scope.Close(Undefined());
+		}
+		//Generating key pair
+		AutoSeededX917RNG<AES> prng;
+		ECDH<ECP>::Domain dhDomain(curve);
+		SecByteBlock privKey(dhDomain.PrivateKeyLength()), publicKey(dhDomain.PublicKeyLength());
+		dhDomain.GenerateKeyPair(prng, privKey, publicKey);
+		//Building the key map
+		newKeyPair->insert(make_pair("keyType", "ecdh"));
+		newKeyPair->insert(make_pair("curveName", curveName));
+		newKeyPair->insert(make_pair("privateKey", SecByteBlockToHexStr(privKey)));
+		newKeyPair->insert(make_pair("publicKey", SecByteBlockToHexStr(publicKey)));
 	}
+	//Building public key info object
+	return scope.Close(PPublicKeyInfo());
+}
+
+Local<Object> KeyRing::PPublicKeyInfo(){
+	Local<Object> pubKeyObj = Object::New();
+	if (keyPair == 0){
+		throw new runtime_error("No loaded key pair");
+	}
+	string keyType = keyPair->at("keyType");
+	pubKeyObj->Set(String::NewSymbol("keyType"), String::New(keyType.c_str()));
+	if (keyType == "rsa"){
+		string params[] = {"modulus", "publicExponent"};
+		for (int i = 0; i < 2; i++){
+			if (!(keyPair->count(params[i]))) throw new runtime_error(params[i] + " parameter is missing from " + keyType + " key pair");
+			pubKeyObj->Set(String::NewSymbol(params[i].c_str()), String::New(keyPair->at(params[i]).c_str()));
+		}
+	} else if (keyType == "dsa"){
+		string params[] = {"primeField", "divider", "base", "publicElement"};
+		for (int i = 0; i < 4; i++){
+			if (!(keyPair->count(params[i]) > 0)) throw new runtime_error(params[i] + " parameter is missing from " + keyType + " key pair");
+			pubKeyObj->Set(String::NewSymbol(params[i].c_str()), String::New(keyPair->at(params[i]).c_str()));
+		}
+	} else if (keyType == "ecies" || keyType == "ecdsa"){
+		string params[] = {"curveName", "publicKeyX", "publicKeyY"};
+		for (int i = 0; i < 3; i++){
+			if (!(keyPair->count(params[i]) > 0)) throw new runtime_error(params[i] + " parameters is missing from " + keyType + " key pair");
+		}
+		pubKeyObj->Set(String::NewSymbol("curveName"), String::New(keyPair->at("curveName").c_str()));
+		Local<Object> publicPoint = Object::New();
+		publicPoint->Set(String::NewSymbol("x"), String::New(keyPair->at("publicKeyX").c_str()));
+		publicPoint->Set(String::NewSymbol("y"), String::New(keyPair->at("publicKeyY").c_str()));
+		pubKeyObj->Set(String::NewSymbol("publicKey"), publicPoint);
+	/*} else if (keyType == "ecdsa"){
+		string params[] = {"curveName", "publicKeyX", "publicKeyY"};
+		for (int i = 0; i < 3; i++){
+			if (!(keyPair->count(params[i]) > 0)) throw new runtime_error(params[i] + " parameter is missing from " + keyType + " key pair");
+		}
+		pubKeyObj*/
+	} else if (keyType == "ecdh"){
+		string params[] = {"curveName", "publicKey"};
+		for (int i = 0; i < 2; i++){
+			if (!(keyPair->count(params[i]) > 0)) throw new runtime_error(params[i] + " parameter is missing from " + keyType + " key pair");
+			pubKeyObj->Set(String::NewSymbol(params[i].c_str()), String::New(keyPair->at(params[i]).c_str()));
+		}
+	} else throw new runtime_error("Internal error. Unknown key type");
+	return pubKeyObj;
 }
 
 /*
@@ -285,7 +410,7 @@ Handle<Value> KeyRing::Load(const Arguments& args){
 		String::Utf8Value filenameVal(args[0]->ToString());
 		string filename(*filenameVal);
 		if (!doesFileExist(filename)){
-			ThrowException(v8::Exception::TypeError("The given file doesn't exist."));
+			ThrowException(v8::Exception::TypeError(String::New("The given file doesn't exist.")));
 			return scope.Close(Undefined());
 		}
 		//If I put a try block here, what kind of exceptions should I catch. I simply don't get it.
@@ -346,8 +471,8 @@ map<string, string>* KeyRing::loadKeyPair(string const& filename, string passphr
 	if (passphrase != ""){ //If passphrase is defined, then decrypt file
 		fileContent = decryptFile(filename, passphrase);
 	} else {
-		fstream file(filename.c_str(), ios::in);
-		getline(file, fileContent);
+		std::fstream file(filename.c_str(), ios::in);
+		std::getline(file, fileContent);
 		fileContent = strHexDecode(fileContent);
 	}
 	map<string, string>* keyPair = decodeBuffer(fileContent);
@@ -359,7 +484,7 @@ bool KeyRing::saveKeyPair(string const& filename, map<string, string>* keyPair, 
 	if (passphrase != ""){
 		encryptFile(filename, buffer, passphrase);
 	} else {
-		fstream file(filename, std::ios::out | std::ios::trunc);
+		std::fstream file(filename, std::ios::out | std::ios::trunc);
 		file << strHexEncode(buffer);
 		file.close();
 	}
@@ -367,7 +492,7 @@ bool KeyRing::saveKeyPair(string const& filename, map<string, string>* keyPair, 
 }
 
 bool KeyRing::doesFileExist(std::string const& filename){
-	fstream file(filename.c_str, std::ios::in);
+	std::fstream file(filename.c_str, std::ios::in);
 	bool isGood = file.good();
 	file.close();
 	return isGood;
@@ -677,6 +802,80 @@ string KeyRing::getCurveName(char curveID){
     else throw new runtime_error("Unknown curve ID");
 }
 
+OID KeyRing::getPCurveFromName(std::string curveName){
+    if (curveName == "secp112r1"){
+        return CryptoPP::ASN1::secp112r1();
+    } else if (curveName == "secp112r2"){
+        return CryptoPP::ASN1::secp112r2();
+    } else if (curveName == "secp128r1"){
+        return CryptoPP::ASN1::secp128r1();
+    } else if (curveName == "secp128r2"){
+        return CryptoPP::ASN1::secp128r2();
+    } else if (curveName == "secp160r1"){
+        return CryptoPP::ASN1::secp160r1();
+    } else if (curveName == "secp160r2"){
+        return CryptoPP::ASN1::secp160r2();
+    } else if (curveName == "secp160k1"){
+        return CryptoPP::ASN1::secp160k1();
+    } else if (curveName == "secp192r1"){
+        return CryptoPP::ASN1::secp192r1();
+    } else if (curveName == "secp192k1"){
+        return CryptoPP::ASN1::secp192k1();
+    } else if (curveName == "secp224r1"){
+        return CryptoPP::ASN1::secp224r1();
+    } else if (curveName == "secp224k1"){
+        return CryptoPP::ASN1::secp224k1();
+    } else if (curveName == "secp256r1"){
+        return CryptoPP::ASN1::secp256r1();
+    } else if (curveName == "secp256k1"){
+        return CryptoPP::ASN1::secp256k1();
+    } else if (curveName == "secp384r1"){
+        return CryptoPP::ASN1::secp384r1();
+    } else if (curveName == "secp521r1"){
+        return CryptoPP::ASN1::secp521r1();
+    } else ThrowException(v8::Exception::TypeError(String::New("Invalid prime curve name")));
+}
+
+OID KeyRing::getBCurveFromName(std::string curveName){
+    if (curveName == "sect113r1"){
+        return CryptoPP::ASN1::sect113r1();
+    } else if (curveName == "sect113r2"){
+        return CryptoPP::ASN1::sect113r2();
+    } else if (curveName == "sect131r1"){
+        return CryptoPP::ASN1::sect131r1();
+    } else if (curveName == "sect131r2"){
+        return CryptoPP::ASN1::sect131r2();
+    } else if (curveName == "sect163r1"){
+        return CryptoPP::ASN1::sect163r1();
+    } else if (curveName == "sect163r2"){
+        return CryptoPP::ASN1::sect163r2();
+    } else if (curveName == "sect163k1"){
+        return CryptoPP::ASN1::sect163k1();
+    } else if (curveName == "sect193r1"){
+        return CryptoPP::ASN1::sect193r1();
+    } else if (curveName == "sect193r2"){
+        return CryptoPP::ASN1::sect193r2();
+    } else if (curveName == "sect233r1"){
+        return CryptoPP::ASN1::sect233r1();
+    } else if (curveName == "sect233k1"){
+        return CryptoPP::ASN1::sect233k1();
+    } else if (curveName == "sect239k1"){
+        return CryptoPP::ASN1::sect239k1();
+    } else if (curveName == "sect283r1"){
+        return CryptoPP::ASN1::sect283r1();
+    } else if (curveName == "sect283k1"){
+        return CryptoPP::ASN1::sect283k1();
+    } else if (curveName == "sect409r1"){
+        return CryptoPP::ASN1::sect409r1();
+    } else if (curveName == "sect409k1"){
+        return CryptoPP::ASN1::sect409k1();
+    } else if (curveName == "sect571r1"){
+        return CryptoPP::ASN1::sect571r1();
+    } else if (curveName == "sect571k1"){
+        return CryptoPP::ASN1::sect571k1();
+    } else ThrowException(v8::Exception::TypeError(String::New("Invalid binary curve name")));
+}
+
 std::string KeyRing::bufferHexEncode(byte buffer[], unsigned int size){
 	std::string encoded;
 	StringSource(buffer, size, true, new HexEncoder(new StringSink(encoded)));
@@ -711,6 +910,19 @@ CryptoPP::Integer KeyRing::HexStrToInteger(std::string const& hexStr){
 	CryptoPP::Integer i;
 	i.Decode(buffer, sizeof(buffer));
 	return i;
+}
+
+std::string KeyRing::SecByteBlockToHexStr(SecByteBlock const& array){
+    CryptoPP::Integer val;
+    val.Decode(array.BytePtr(), array.SizeInBytes());
+    return IntegerToHexStr(val);
+}
+
+SecByteBlock KeyRing::HexStrToSecByteBlock(std::string const& hexStr){
+    CryptoPP::Integer val = HexStrToInteger(hexStr);
+    SecByteBlock block(val.MinEncodedSize());
+    val.Encode(block.BytePtr(), block.SizeInBytes());
+    return block;
 }
 
 void KeyRing::encryptFile(std::string const& filename, std::string const& content, std::string const& passphrase, unsigned int pbkdfIterations, int aesKeySize){

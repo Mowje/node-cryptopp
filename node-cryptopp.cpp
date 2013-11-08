@@ -1314,7 +1314,7 @@ Handle<Value> dsaVerify(const Arguments& args){
 // Lib initialization method
 void init(Handle<Object> exports){
     // Binding the keyManager class
-    KeyManager::Init(exports);
+    KeyRing::Init(exports);
     // Setting the cryptopp.hex object
 	Local<Object> hexObj = Object::New();
 	hexObj->Set(String::NewSymbol("encode"), FunctionTemplate::New(hexEncode)->GetFunction());
