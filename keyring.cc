@@ -136,7 +136,13 @@ Handle<Value> KeyRing::New(const Arguments& args){
 	HandleScope scope;
 	if (args.IsConstructCall()){
 		//Invoked as a constructor
-		string filename = args[0]->IsUndefined() ? "" : string(*(args[0]->ToString()));
+			string filename;
+		if (args[0]->IsUndefined()){
+			filename = "";
+		} else {
+			String::Utf8Value filenameVal(args[0]->ToString());
+			filename = string(*filenameVal);
+		}
 		KeyRing* newInstance = new KeyRing(filename);
 		newInstance->Wrap(args.This());
 		return args.This();
@@ -157,16 +163,53 @@ Handle<Value> KeyRing::New(const Arguments& args){
 
 /*
 * Signature :
-* String message
+* String message, String encoding (defaults to hex)
 */
 Handle<Value> KeyRing::Decrypt(const Arguments& args){
 	HandleScope scope;
+	//Checking the number of arguments given to the method
+	if (!(args.Length() == 1 || args.Length() == 2)){
+		ThrowException(Exception::TypeError(String::New("Invalid number of parameters")));
+		return scope.Close(Undefined());
+	}
+	//Unwrapping current instance and checking that a key pair is loaded
 	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
 	if (instance->keyPair == 0){
 		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
 		return scope.Close(Undefined());
 	}
 	//Checking the key type
+	string keyType = instance->keyPair->at("keyType");
+	if (!(keyType == "rsa" || keyType == "ecies")){
+		ThrowException(Exception::TypeError(String::New("The key pair loaded is not one of an asymmetric encryption algorithm.")));
+		return scope.Close(Undefined());
+	}
+	//Casting parameters
+	string cipher, encoding = "";
+	String::Utf8Value cipherVal(args[0]->ToString());
+	cipher = string(*cipherVal);
+	if (args.Length() == 2){
+		String::Utf8Value encodingVal(args[1]->ToString());
+		encoding = string(*encodingVal);
+		if (!(encoding == "hex" || encoding == "base64")){
+			ThrowException(Exception::TypeError(String::New("Unknown encoding. Valid values are \"hex\" and \"base64\"")));
+			return scope.Close(Undefined());
+		}
+	}
+	if (keyType == "rsa"){
+		AutoSeededRandomPool prng;
+		InvertibleRSAFunction privateParams;
+		privateParams.Initialize(HexStrToInteger(instance->keyPair->at("modulus")), HexStrToInteger(instance->keyPair->at("publicExponent")), HexStrToInteger(instance->keyPair->at("privateExponent")));
+		RSA::PrivateKey privateKey(privateParams);
+		RSAES_OAEP_SHA_Decryptor decryptor(privateKey);
+		if (encoding == "hex" || encoding == ""){
+			cipher = strHexDecode(cipher);
+		} else if (encoding == "base64"){
+
+		}
+	} else {
+
+	}
 }
 
 /*
@@ -351,7 +394,7 @@ Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
 		newKeyPair->insert(make_pair("publicKey", SecByteBlockToHexStr(publicKey)));
 	}
 	//Building public key info object
-	return scope.Close(PPublicKeyInfo());
+	return scope.Close(instance->PPublicKeyInfo());
 }
 
 Local<Object> KeyRing::PPublicKeyInfo(){
@@ -484,7 +527,7 @@ bool KeyRing::saveKeyPair(string const& filename, map<string, string>* keyPair, 
 	if (passphrase != ""){
 		encryptFile(filename, buffer, passphrase);
 	} else {
-		std::fstream file(filename, std::ios::out | std::ios::trunc);
+		std::fstream file(filename.c_str(), std::ios::out | std::ios::trunc);
 		file << strHexEncode(buffer);
 		file.close();
 	}
@@ -492,7 +535,7 @@ bool KeyRing::saveKeyPair(string const& filename, map<string, string>* keyPair, 
 }
 
 bool KeyRing::doesFileExist(std::string const& filename){
-	std::fstream file(filename.c_str, std::ios::in);
+	std::fstream file(filename.c_str(), std::ios::in);
 	bool isGood = file.good();
 	file.close();
 	return isGood;
@@ -530,7 +573,7 @@ map<string, string>* KeyRing::decodeBuffer(string const& fileBuffer){
 		}
 		keyPair = new map<string, string>();
 		if (keyType == 0x00) keyPair->insert(make_pair("keyType", "ecdsa"));
-		else (keyType == 0x04) keyPair->insert(make_pair("keyType", "ecies"));
+		else keyPair->insert(make_pair("keyType", "ecies")); //(ie keyType == 0x04)
 		keyPair->insert(make_pair("curveName", curveName));
 		keyPair->insert(make_pair("publicKeyX", publicX));
 		keyPair->insert(make_pair("publicKeyY", publicY));
@@ -599,7 +642,7 @@ map<string, string>* KeyRing::decodeBuffer(string const& fileBuffer){
 	} else if (keyType == 0x03){ //ECDH keys
 		char curveID = buffer->sbumpc();
 		string curveName = getCurveName(curveID);
-		unsigned short publicKeyLength, privateKey;
+		unsigned short publicKeyLength, privateKeyLength;
 		string publicKey = "", privateKey = "";
 		publicKeyLength = ((int) buffer->sbumpc()) << 8;
 		publicKeyLength += (int) buffer->sbumpc();
@@ -678,11 +721,11 @@ string KeyRing::encodeBuffer(map<string, string>* keyPair){
 		//Checking key pair integrality
 		string params[] = {"primeField", "divider", "base", "publicElement", "privateExponent"};
 		for (int i = 0; i < 5; i++){
-			if (!keyPair->at(params[i])) throw new runtime_error("Missing parameter : " + params[i]);
+			if (!(keyPair->count(params[i]) > 0)) throw new runtime_error("Missing parameter : " + params[i]);
 		}
 		//Writing the key type
 		buffer << (char) 0x02;
-		string primeField = keyPair->at("primeField"), divder = keyPair->at("divider"), base = keyPair->at("base"), publicElement = keyPair->at("publicElement"), privateExponent = keyPair->at("privateExponent");
+		string primeField = keyPair->at("primeField"), divider = keyPair->at("divider"), base = keyPair->at("base"), publicElement = keyPair->at("publicElement"), privateExponent = keyPair->at("privateExponent");
 		//Writing the primeField
 		buffer << (char) (primeField.length() >> 8);
 		buffer << (char) primeField.length();
@@ -940,7 +983,7 @@ void KeyRing::encryptFile(std::string const& filename, std::string const& conten
 	//Calculating key
 	byte key[aesKeySize];
 	PKCS5_PBKDF2_HMAC<SHA1> derivation;
-	derivation.DeriveKey(key, sizeof(key), 0 passphraseArray, sizeof(passphraseArray), salt, sizeof(salt), pbkdfIterations);
+	derivation.DeriveKey(key, sizeof(key), 0, passphraseArray, sizeof(passphraseArray), salt, sizeof(salt), pbkdfIterations);
 	//Generating an IV
 	byte iv[AES::BLOCKSIZE];
 	prng.GenerateBlock(iv, sizeof(iv));
