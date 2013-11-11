@@ -136,21 +136,42 @@ Handle<Value> KeyRing::New(const Arguments& args){
 	HandleScope scope;
 	if (args.IsConstructCall()){
 		//Invoked as a constructor
-			string filename;
+		if (args.Length() > 2){
+			ThrowException(Exception::TypeError(String::New("Invalid number of arguments on KeyRing constructor call")));
+			return scope.Close(Undefined());
+		}
+		string filename;
 		if (args[0]->IsUndefined()){
 			filename = "";
 		} else {
 			String::Utf8Value filenameVal(args[0]->ToString());
 			filename = string(*filenameVal);
 		}
-		KeyRing* newInstance = new KeyRing(filename);
-		newInstance->Wrap(args.This());
+		if (args.Length() == 2){
+			String::Utf8Value passphraseVal(args[1]->ToString());
+			string passphrase(*passphraseVal);
+			KeyRing* newInstance = new KeyRing(filename, passphrase);
+			newInstance->Wrap(args.This());
+		} else {
+			KeyRing* newInstance = new KeyRing(filename);
+			newInstance->Wrap(args.This());
+		}
 		return args.This();
 	} else {
 		//Invoked as a plain function, turn into construct call
-		const int argc = 1;
-		Local<Value> argv[argc] = { args[0] };
-		return scope.Close(constructor->NewInstance(argc, argv));
+		if (args.Length() > 2){
+			ThrowException(Exception::TypeError(String::New("Invalid number of arguments on KeyRing constructor call")));
+			return scope.Close(Undefined());
+		}
+		if (args.Length() == 1){
+			Local<Value> argv[1] = { args[0] };
+			return scope.Close(constructor->NewInstance(1, argv));
+		} else if (args.Length() == 2){
+			Local<Value> argv[2] = { args[0], args[1] };
+			return scope.Close(constructor->NewInstance(2, argv));
+		} else {
+			return scope.Close(constructor->NewInstance());
+		}
 	}
 }
 
@@ -1135,19 +1156,22 @@ string KeyRing::strBase64Decode(string const& e){
 	return decoded;
 }
 
-void KeyRing::encryptFile(std::string const& filename, std::string const& content, std::string const& passphrase, unsigned int pbkdfIterations, int aesKeySize){
+void KeyRing::encryptFile(std::string const& filename, std::string content, std::string const& passphrase, unsigned int pbkdfIterations, int aesKeySize){
 	if (!(aesKeySize == 256 || aesKeySize == 192 || aesKeySize == 128)) throw new runtime_error("AES key size must be either 128, 192 or 256");
 	aesKeySize /= 8;
 	AutoSeededRandomPool prng;
 	//Generating pbkdf salt
+	cout << "Generating salt" << endl;
 	byte salt[16];
 	prng.GenerateBlock(salt, sizeof(salt));
 	//Copying passphrase to byte array
+	cout << "Copying passphrase to array" << endl;
 	byte passphraseArray[passphrase.size()];
 	for (int i = 0; i < sizeof(passphraseArray); i++){
 		passphraseArray[i] = passphrase[i];
 	}
 	//Calculating key
+	cout << "Calculating key" << endl;
 	byte key[aesKeySize];
 	PKCS5_PBKDF2_HMAC<SHA1> derivation;
 	derivation.DeriveKey(key, sizeof(key), 0, passphraseArray, sizeof(passphraseArray), salt, sizeof(salt), pbkdfIterations);
@@ -1155,11 +1179,14 @@ void KeyRing::encryptFile(std::string const& filename, std::string const& conten
 	byte iv[AES::BLOCKSIZE];
 	prng.GenerateBlock(iv, sizeof(iv));
 	//Encrypt content
+	cout << "Initializing encryptor" << endl;
 	CFB_Mode<AES>::Encryption e;
 	e.SetKeyWithIV(key, sizeof(key), iv);
 	string encrypted;
+	cout << "Encrypting the buffer" << endl;
 	StringSource(content, true, new StreamTransformationFilter(e, new StringSink(encrypted)));
 	//Opening file and writing content
+	cout << "Writing file" << endl;
 	fstream file(filename.c_str(), ios::out | ios::trunc);
 	file << bufferHexEncode(salt, sizeof(salt));
 	file << std::endl;
