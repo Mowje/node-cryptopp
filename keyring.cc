@@ -169,7 +169,7 @@ Handle<Value> KeyRing::Decrypt(const Arguments& args){
 	HandleScope scope;
 	//Checking the number of arguments given to the method
 	if (!(args.Length() == 1 || args.Length() == 2)){
-		ThrowException(Exception::TypeError(String::New("Invalid number of parameters")));
+		ThrowException(Exception::TypeError(String::New("Invalid number of parameters. Please check the module's documentation")));
 		return scope.Close(Undefined());
 	}
 	//Unwrapping current instance and checking that a key pair is loaded
@@ -227,15 +227,101 @@ Handle<Value> KeyRing::Decrypt(const Arguments& args){
 
 /*
 * Signature :
-* String message
+* String message, String signatureEncoding (defaults to hex), String hashFunctionName (either "sha1" or "sha256", defaults to "sha1")
 */
 Handle<Value> KeyRing::Sign(const Arguments& args){
 	HandleScope scope;
+	//Checking the number of parameters
+	if (!(args.Length() == 1 || args.Length() == 2 || args.Length() == 3)){
+		ThrowException(Exception::TypeError(String::New("Invalid number of parameters. Please check the module's documentation")));
+		return scope.Close(Undefined());
+	}
+	//Checking that a key pair is loaded
 	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
 	if (instance->keyPair == 0){
 		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
 		return scope.Close(Undefined());
 	}
+	//Checking the key type
+	string keyType = instance->keyPair->at("keyType");
+	if (!(keyType == "rsa" || keyType == "dsa" || keyType == "ecdsa" || keyType == "ecies")){
+		ThrowException(Exception::TypeError(String::New("The key pair loaded is one of a signature algorithm")));
+		return scope.Close(Undefined());
+	}
+	//Casting the parameters
+	String::Utf8Value messageVal(args[0]->ToString());
+	string message, signature, encoding = "", hashFunctionName = "sha1";
+	message = string(*messageVal);
+	if (args.Length() == 2){
+		String::Utf8Value encodingVal(args[1]->ToString());
+		encoding = string(*encodingVal);
+		//Checking that the encoding parameter is valid
+		if (!(encoding == "hex" || encoding == "base64")){
+			ThrowException(Exception::TypeError(String::New("Invalid encoding. It must be either \"hex\" or \"base64\".")));
+			return scope.Close(Undefined());
+		}
+	}
+	if (args.Length() == 3){
+		String::Utf8Value hashFunctionNameVal(args[2]->ToString());
+		hashFunctionName = string(*hashFunctionNameVal);
+		if (!(hashFunctionName == "sha1" || hashFunctionName == "sha256")){
+			ThrowException(Exception::TypeError(String::New("hashFunction must be either \"sha1\" or \"sha256\"")));
+			return scope.Close(Undefined());
+		}
+		if (keyType == "dsa" && hashFunctionName != "sha1"){
+			//DSA can be used with SHA1 only
+			ThrowException(Exception::TypeError(String::New("DSA can only be used with SHA1. :/")));
+			return scope.Close(Undefined());
+		}
+	}
+	Local<Value> result = Local<Value>::New(Undefined());
+	AutoSeededRandomPool prng;
+	if (keyType == "rsa"){
+		InvertibleRSAFunction privateParams;
+		privateParams.Initialize(HexStrToInteger(instance->keyPair->at("modulus")), HexStrToInteger(instance->keyPair->at("publicExponent")), HexStrToInteger(instance->keyPair->at("privateExponent")));
+		RSA::PrivateKey privateKey(privateParams);
+		if (hashFunctionName == "sha1"){
+			RSASS<PSS, SHA1>::Signer signer(privateKey);
+			StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
+		} else if (hashFunctionName == "sha256") {
+			RSASS<PSS, SHA256>::Signer signer(privateKey);
+			StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
+		} else {
+			ThrowException(Exception::TypeError(String::New("Internal error : unknown hash function")));
+			return scope.Close(Undefined());
+		}
+	} else if (keyType == "dsa"){
+		DSA::PrivateKey privateKey;
+		privateKey.Initialize(HexStrToInteger(instance->keyPair->at("primeField")), HexStrToInteger(instance->keyPair->at("divider")), HexStrToInteger(instance->keyPair->at("base")), HexStrToInteger(instance->keyPair->at("privateExponent")));
+		DSA::Signer signer(privateKey);
+		StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
+	} else { //ECDSA / ECIES key pair case
+		OID curve = getPCurveFromName(instance->keyPair->at("curveName"));
+		if (hashFunctionName == "sha1"){
+			ECDSA<ECP, SHA1>::PrivateKey privateKey;
+			privateKey.Initialize(prng, curve);
+			privateKey.SetPrivateExponent(HexStrToInteger(instance->keyPair->at("privateKey")));
+			StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA1>::Signer(privateKey), new StringSink(signature)));
+		} else if (hashFunctionName == "sha256"){
+			ECDSA<ECP, SHA256>::PrivateKey privateKey;
+			privateKey.Initialize(prng, curve);
+			privateKey.SetPrivateExponent(HexStrToInteger(instance->keyPair->at("privateKey")));
+			StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA256>::Signer(privateKey), new StringSink(signature)));
+		} else {
+			ThrowException(Exception::TypeError(String::New("Internal error : unknown hash function")));
+			return scope.Close(Undefined());
+		}
+	}
+	if (encoding == "hex" || encoding == ""){
+		signature = strHexEncode(signature);
+	} else if (encoding == "base64"){
+		signature = strBase64Encode(signature);
+	} else {
+		ThrowException(Exception::TypeError(String::New("Internal error : unknown encoding")));
+		return scope.Close(Undefined());
+	}
+	result = String::New(signature.c_str());
+	return scope.Close(result);
 }
 
 /*
@@ -244,11 +330,53 @@ Handle<Value> KeyRing::Sign(const Arguments& args){
 */
 Handle<Value> KeyRing::Agree(const Arguments& args){
 	HandleScope scope;
+	if (!(args.Length() == 1 || args.Length() == 2)){
+		ThrowException(Exception::TypeError(String::New("Invalid number of parameters. Please check the module's documentation")));
+		return scope.Close(Undefined());
+	}
 	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
 	if (instance->keyPair == 0){
 		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
 		return scope.Close(Undefined());
 	}
+	string keyType = instance->keyPair->at("keyType");
+	if (keyType != "ecdh"){
+		ThrowException(Exception::TypeError(String::New("The \"agree\" method is for a key agreement algorithm. The only one supported here is ECDH.")));
+		return scope.Close(Undefined());
+	}
+	string secretStr;
+	Local<Value> result = Local<Value>::New(Undefined());
+	//Casting the pubKey parameter and checking that curves are the same
+	Local<Object> pubKeyObj;
+	pubKeyObj = Local<Object>::Cast(args[0]);
+	String::Utf8Value counterpartCurveVal(pubKeyObj->Get(String::NewSymbol("curveName")));
+	String::Utf8Value counterpartPubKeyVal(pubKeyObj->Get(String::NewSymbol("publicKey")));
+	string counterpartCurve(*counterpartCurveVal);
+	string counterpartPubKey(*counterpartPubKeyVal);
+	/*if (pubKeyObj->Has(String::NewSymbol("encoding"))){
+		string counterpartEncoding = pubKeyObj->Get(String::NewSymbol("encoding"));
+		if (counterpartEncoding == "hex"){
+
+		} else if (counterpartEncoding == "base64"){
+
+		} else {
+			ThrowException(Exception::TypeError(String::New("")));
+		}
+	} else {
+		counterpartPubKey = 
+	}*/
+	if (counterpartCurve != instance->keyPair->at("curveName")){
+		ThrowException(Exception::TypeError(String::New("curves are not the same")));
+		return scope.Close(Undefined());
+	}
+	OID curve = getPCurveFromName(instance->keyPair->at("curveName"));
+	ECDH<ECP>::Domain dhDomain(curve);
+	SecByteBlock privateKey = HexStrToSecByteBlock(instance->keyPair->at("privateKey"));
+	SecByteBlock publicKey = HexStrToSecByteBlock(counterpartPubKey);
+	SecByteBlock secret(dhDomain.AgreedValueLength());
+	dhDomain.Agree(secret, privateKey, publicKey);
+	result = String::New(SecByteBlockToHexStr(secret).c_str());
+	return scope.Close(result);
 }
 
 // No params
@@ -270,6 +398,7 @@ Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
 	HandleScope scope;
 	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
 	if (args.Length() < 2){
+		//"Invalid number of parameters. Please check the module's documentation"
 		ThrowException(Exception::TypeError(String::New("Invalid number of parameters. You must at least specify the key type and related paremters like key size or curve name")));
 		return scope.Close(Undefined());
 	}
@@ -405,6 +534,19 @@ Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
 		newKeyPair->insert(make_pair("curveName", curveName));
 		newKeyPair->insert(make_pair("privateKey", SecByteBlockToHexStr(privKey)));
 		newKeyPair->insert(make_pair("publicKey", SecByteBlockToHexStr(publicKey)));
+	}
+	//Saving the key if asked by the user
+	if (args.Length() == 3){
+		String::Utf8Value filenameVal(args[2]->ToString());
+		string filename(*filenameVal);
+		saveKeyPair(filename, newKeyPair);
+		instance->filename_ = filename;
+	} else if (args.Length() == 4){
+		String::Utf8Value filenameVal(args[2]->ToString());
+		String::Utf8Value passphraseVal(args[3]->ToString());
+		string filename(*filenameVal), passphrase(*passphraseVal);
+		saveKeyPair(filename, newKeyPair, passphrase);
+		instance->filename_ = filename;
 	}
 	//Building public key info object
 	return scope.Close(instance->PPublicKeyInfo());
