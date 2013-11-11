@@ -180,12 +180,12 @@ Handle<Value> KeyRing::Decrypt(const Arguments& args){
 	}
 	//Checking the key type
 	string keyType = instance->keyPair->at("keyType");
-	if (!(keyType == "rsa" || keyType == "ecies")){
+	if (!(keyType == "rsa" || keyType == "ecies" || keyType == "ecdsa")){
 		ThrowException(Exception::TypeError(String::New("The key pair loaded is not one of an asymmetric encryption algorithm.")));
 		return scope.Close(Undefined());
 	}
 	//Casting parameters
-	string cipher, encoding = "";
+	string cipher, plaintext, encoding = "";
 	String::Utf8Value cipherVal(args[0]->ToString());
 	cipher = string(*cipherVal);
 	if (args.Length() == 2){
@@ -196,20 +196,33 @@ Handle<Value> KeyRing::Decrypt(const Arguments& args){
 			return scope.Close(Undefined());
 		}
 	}
+	Local<Value> result = Local<Value>::New(Undefined());\
+	AutoSeededRandomPool prng;
+	if (encoding == "hex" || encoding == ""){
+		cipher = strHexDecode(cipher);
+	} else if (encoding == "base64"){
+		cipher = strBase64Decode(cipher);
+	}
 	if (keyType == "rsa"){
-		AutoSeededRandomPool prng;
 		InvertibleRSAFunction privateParams;
 		privateParams.Initialize(HexStrToInteger(instance->keyPair->at("modulus")), HexStrToInteger(instance->keyPair->at("publicExponent")), HexStrToInteger(instance->keyPair->at("privateExponent")));
 		RSA::PrivateKey privateKey(privateParams);
 		RSAES_OAEP_SHA_Decryptor decryptor(privateKey);
-		if (encoding == "hex" || encoding == ""){
-			cipher = strHexDecode(cipher);
-		} else if (encoding == "base64"){
-
-		}
+		StringSource(cipher, true, new PK_DecryptorFilter(prng, decryptor, new StringSink(plaintext)));
 	} else {
-
+		OID curve = getPCurveFromName(instance->keyPair->at("curveName"));
+		ECIES<ECP>::Decryptor d;
+		d.AccessKey().AccessGroupParameters().Initialize(curve);
+		d.AccessKey().SetPrivateExponent(HexStrToInteger(instance->keyPair->at("privateKey")));
+		try {
+			StringSource(cipher, true, new PK_DecryptorFilter(prng, d, new StringSink(plaintext)));
+		} catch (CryptoPP::Exception const& ex){
+			ThrowException(Exception::TypeError(String::New("Crypto error")));
+			return scope.Close(Undefined());
+		}
 	}
+	result = String::New(plaintext.c_str());
+	return scope.Close(result);
 }
 
 /*
@@ -966,6 +979,18 @@ SecByteBlock KeyRing::HexStrToSecByteBlock(std::string const& hexStr){
     SecByteBlock block(val.MinEncodedSize());
     val.Encode(block.BytePtr(), block.SizeInBytes());
     return block;
+}
+
+string KeyRing::strBase64Encode(string const& s){
+	string encoded;
+	StringSource(s, true, new Base64Encoder(new StringSink(encoded)));
+	return encoded;
+}
+
+string KeyRing::strBase64Decode(string const& e){
+	string decoded;
+	StringSource(e, true, new Base64Decoder(new StringSink(decoded)));
+	return decoded;
 }
 
 void KeyRing::encryptFile(std::string const& filename, std::string const& content, std::string const& passphrase, unsigned int pbkdfIterations, int aesKeySize){

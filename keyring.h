@@ -45,6 +45,9 @@ private:
 	static CryptoPP::Integer HexStrToInteger(std::string const& hexStr);
 	static std::string SecByteBlockToHexStr(SecByteBlock const& array);
 	static SecByteBlock HexStrToSecByteBlock(std::string const& hexStr);
+	//String <-> Base64 conversions
+	static std::string strBase64Encode(std::string const& s);
+	static std::string strBase64Decode(std::string const& e);
 	//PBKDF2 / AES file encryption / decryption
 	static void encryptFile(std::string const& filename, std::string const& content, std::string const& passphrase, unsigned int pbkdfIterations = 8192, int aesKeySize = 256);
 	static std::string decryptFile(std::string const& filename, std::string const& passphrase, unsigned int pbkdfIterations = 8192, int aesKeySize = 256);
