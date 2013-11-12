@@ -671,29 +671,47 @@ Handle<Value> ecdsaGenerateKeyPairP(const Arguments& args){
     }
 }
 
-//Method signature : ecdsa.prime.sign(message, privateKey, curveName, [callback(signature)]); if no callback is given then the signature is returned
+//Method signature : ecdsa.prime.sign(message, privateKey, curveName, [hashName], [callback(signature)]); if no callback is given then the signature is returned
 Handle<Value> ecdsaSignMessageP(const Arguments& args){
     HandleScope scope;
-    if (args.Length() == 3 || args.Length() == 4){
+    if (args.Length() >= 3 && args.Length() <= 5){
         String::Utf8Value messageVal(args[0]->ToString());
         String::AsciiValue privateKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
-        std::string curveName(*curveNameVal), message(*messageVal), privateKeyStr(*privateKeyVal), signature;
+        std::string curveName(*curveNameVal), message(*messageVal), privateKeyStr(*privateKeyVal), signature, hashName = "";
+        if (args.Length() >= 4){
+            if (!args[3]->IsUndefined()){
+                String::Utf8Value hashNameVal(args[3]->ToString());
+                hashName = std::string(*hashNameVal);
+                if (!(hashName == "sha1" || hashName == "sah256")){
+                    ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
+                    return scope.Close(Undefined());
+                }
+            }
+        }
         Local<Value> result = Local<Value>::New(Undefined());
         //Checking the existence of the curve
         OID curve = getPCurveFromName(curveName);
         //Method body
         AutoSeededRandomPool prng;
-        ECDSA<ECP, SHA256>::PrivateKey privateKey;
-        privateKey.Initialize(prng, curve);
-        privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
-        StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA256>::Signer(privateKey), new StringSink(signature)));
+        if (hashName == "" || hashName == "sha1"){
+            ECDSA<ECP, SHA1>::PrivateKey privateKey;
+            privateKey.Initialize(prng, curve);
+            privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
+            StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA256>::Signer(privateKey), new StringSink(signature)));
+        } else {
+            ECDSA<ECP, SHA256>::PrivateKey privateKey;
+            privateKey.Initialize(prng, curve);
+            privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
+            StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA256>::Signer(privateKey), new StringSink(signature)));
+        }
         signature = strHexEncode(signature);
         result = String::New(signature.c_str());
         // Returning the result
-        if (args.Length() == 3){
+        if (args.Length() < 5){
             return scope.Close(result);
         } else {
-            Local<Function> callback = Local<Function>::Cast(args[3]);
+            if (args[4]->IsUndefined()) return scope.Close(result);
+            Local<Function> callback = Local<Function>::Cast(args[4]);
             const unsigned argc = 1;
             Local<Value> argv[argc] = { Local<Value>::New(result) };
             callback->Call(Context::GetCurrent()->Global(), argc, argv);
@@ -705,14 +723,24 @@ Handle<Value> ecdsaSignMessageP(const Arguments& args){
     }
 }
 
-//Method signature : ecdsa.prime.verify(message, signature, publicKey, curveName, [callback(authentic)]); if no callback is given then the methods returns a boolean, whether the message is authentic or not
+//Method signature : ecdsa.prime.verify(message, signature, publicKey, curveName, [hashName], [callback(authentic)]); if no callback is given then the methods returns a boolean, whether the message is authentic or not
 Handle<Value> ecdsaVerifyMessageP(const Arguments& args){
     HandleScope scope;
-    if (args.Length() == 4 || args.Length() == 5){
+    if (args.Length() >= 4 && args.Length() <= 6){
         String::Utf8Value messageVal(args[0]->ToString());
         String::AsciiValue signatureVal(args[1]->ToString()), curveNameVal(args[3]->ToString());
         Local<Object> publicKeyObj = Local<Object>::Cast(args[2]);
-        std::string message(*messageVal), signature(*signatureVal), curveName(*curveNameVal);
+        std::string message(*messageVal), signature(*signatureVal), curveName(*curveNameVal), hashName = "";
+        if (args.Length() >= 5){
+            if (!args[4]->IsUndefined()){
+                String::Utf8Value hashNameVal(args[4]->ToString());
+                hashName = std::string(*hashNameVal);
+                if (!(hashName == "sha1" || hashName == "sha256")){
+                    ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
+                    return scope.Close(Undefined());
+                }
+            }
+        }
         Local<Value> result = Local<Value>::New(Undefined());
         //Checking the existence of the curve
         if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))){
@@ -723,20 +751,32 @@ Handle<Value> ecdsaVerifyMessageP(const Arguments& args){
         //Method body
         bool valid = false;
         AutoSeededRandomPool prng;
-        ECDSA<ECP, SHA256>::PublicKey publicKey;
-        Local<String> xVal, yVal;
-        xVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("x")));
-        yVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("y")));
-        const ECPPoint publicElement(HexStrToInteger(*(String::AsciiValue(xVal))), HexStrToInteger(*(String::AsciiValue(yVal))));
-        publicKey.Initialize(curve, publicElement);
-        signature = strHexDecode(signature);
-        StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<ECP, SHA256>::Verifier(publicKey), new ArraySink( (byte*)&valid, sizeof(valid) )));
+        if (hashName == "" || hashName == "sha1"){
+            ECDSA<ECP, SHA1>::PublicKey publicKey;
+            Local<String> xVal, yVal;
+            xVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("x")));
+            yVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("y")));
+            const ECPPoint publicElement(HexStrToInteger(*(String::AsciiValue(xVal))), HexStrToInteger(*(String::AsciiValue(yVal))));
+            publicKey.Initialize(curve, publicElement);
+            signature = strHexDecode(signature);
+            StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<ECP, SHA1>::Verifier(publicKey), new ArraySink( (byte*)&valid, sizeof(valid) )));
+        } else {
+            ECDSA<ECP, SHA256>::PublicKey publicKey;
+            Local<String> xVal, yVal;
+            xVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("x")));
+            yVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("y")));
+            const ECPPoint publicElement(HexStrToInteger(*(String::AsciiValue(xVal))), HexStrToInteger(*(String::AsciiValue(yVal))));
+            publicKey.Initialize(curve, publicElement);
+            signature = strHexDecode(signature);
+            StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<ECP, SHA256>::Verifier(publicKey), new ArraySink( (byte*)&valid, sizeof(valid) )));
+        }
         result = BooleanObject::New(valid);
         //Returning the result
-        if (args.Length() == 4){
+        if (args.Length() < 6){
             return scope.Close(result);
         } else {
-            Local<Function> callback = Local<Function>::Cast(args[4]);
+            if (args[5]->IsUndefined()) return scope.Close(result);
+            Local<Function> callback = Local<Function>::Cast(args[5]);
             const unsigned argc = 1;
             Local<Value> argv[argc] = { Local<Value>::New(result) };
             callback->Call(Context::GetCurrent()->Global(), argc, argv);
@@ -1135,28 +1175,45 @@ Handle<Value> rsaDecrypt(const Arguments& args){
     }
 }
 
-// Method signature : cryptopp.rsa.sign(message, modulus, privateExponent, publicExponent [callback(signature)])
+// Method signature : cryptopp.rsa.sign(message, modulus, privateExponent, publicExponent, [hashName], [callback(signature)])
 Handle<Value> rsaSign(const Arguments& args){
     HandleScope scope;
-    if (args.Length() == 4 || args.Length() == 5){
+    if (args.Length() >= 4 && args.Length() <= 6){
         //Casting arguments
         String::Utf8Value messageVal(args[0]->ToString());
         String::AsciiValue modulusVal(args[1]->ToString()), privateExpVal(args[2]->ToString()), publicExpVal(args[3]->ToString());
-        std::string message(*messageVal), modulusStr(*modulusVal), privateExpStr(*privateExpVal), publicExpStr(*publicExpVal), signature;
+        std::string message(*messageVal), modulusStr(*modulusVal), privateExpStr(*privateExpVal), publicExpStr(*publicExpVal), signature, hashName = "";
+        //Casting the hashName argument
+        if (args.Length() >= 5){
+            if (!args[4]->IsUndefined()){
+                String::Utf8Value hashNameVal(args[4]->ToString());
+                hashName = std::string(*hashNameVal);
+                if (!(hashName == "sha1" || hashName == "sha256")){
+                    ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
+                    return scope.Close(Undefined());
+                }
+            }
+        }
         Local<Value> result = Local<Value>::New(Undefined());
         //Signing the message
         AutoSeededRandomPool prng;
         InvertibleRSAFunction privateParams;
         privateParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr), HexStrToInteger(privateExpStr));
         RSA::PrivateKey privateKey(privateParams);
-        RSASS<PSS, SHA256>::Signer signer(privateKey);
-        StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
+        if (hashName == "" || hashName == "sha1"){
+            RSASS<PSS, SHA1>::Signer signer(privateKey);
+            StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
+        } else {
+            RSASS<PSS, SHA256>::Signer signer(privateKey);
+            StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
+        }
         signature = strHexEncode(signature);
         result = String::New(signature.c_str());
-        if (args.Length() == 4){
+        if (args.Length() < 6){
             return scope.Close(result);
         } else {
-            Local<Function> callback = Local<Function>::Cast(args[4]);
+            if (args[5]->IsUndefined()) return scope.Close(result);
+            Local<Function> callback = Local<Function>::Cast(args[5]);
             const unsigned argc = 1;
             Local<Value> argv[argc] = { Local<Value>::New(result) };
             callback->Call(Context::GetCurrent()->Global(), argc, argv);
@@ -1168,29 +1225,45 @@ Handle<Value> rsaSign(const Arguments& args){
     }
 }
 
-// Method signature : cryptopp.rsa.verify(message, signature, modulus, publicExponent, [callback(isValid)])
+// Method signature : cryptopp.rsa.verify(message, signature, modulus, publicExponent, [hashName], [callback(isValid)])
 Handle<Value> rsaVerify(const Arguments& args){
     HandleScope scope;
-    if (args.Length() == 4 || args.Length() == 5){
+    if (args.Length() >= 4 || args.Length() <= 6){
         //Casting parameters
         String::Utf8Value messageVal(args[0]->ToString());
         String::AsciiValue signatureVal(args[1]->ToString()), modulusVal(args[2]->ToString()), publicExpVal(args[3]->ToString());
-        std::string message(*messageVal), signature(*signatureVal), modulusStr(*modulusVal), publicExpStr(*publicExpVal);
+        std::string message(*messageVal), signature(*signatureVal), modulusStr(*modulusVal), publicExpStr(*publicExpVal), hashName = "";
         signature = strHexDecode(signature);
+        if (args.Length() >= 5){
+            if (!args[4]->IsUndefined()){
+                String::Utf8Value hashNameVal(args[4]->ToString());
+                hashName = std::string(*hashNameVal);
+                if (!(hashName == "sha1" || hashName == "sha256")){
+                    ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
+                    return scope.Close(Undefined());
+                }
+            }
+        }
         Local<Value> result = Local<Value>::New(Undefined());
         //Verifying the signature
         RSAFunction publicParams;
         bool isValid = false;
         publicParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr));
         RSA::PublicKey publicKey(publicParams);
-        RSASS<PSS, SHA256>::Verifier verifier(publicKey);
-        StringSource(signature+message, true, new SignatureVerificationFilter(verifier, new ArraySink( (byte*)&isValid, sizeof(isValid) )));
+        if (hashName == "" || hashName == "sha1"){
+            RSASS<PSS, SHA1>::Verifier verifier(publicKey);
+            StringSource(signature+message, true, new SignatureVerificationFilter(verifier, new ArraySink( (byte*)&isValid, sizeof(isValid) )));
+        } else {
+            RSASS<PSS, SHA256>::Verifier verifier(publicKey);
+            StringSource(signature+message, true, new SignatureVerificationFilter(verifier, new ArraySink( (byte*)&isValid, sizeof(isValid) )));
+        }
         result = BooleanObject::New(isValid);
         //Returning the result
-        if (args.Length() == 4){
+        if (args.Length() < 6){
             return scope.Close(result);
         } else {
-            Local<Function> callback = Local<Function>::Cast(args[4]);
+            if (args[5]->IsUndefined()) return scope.Close(Undefined());
+            Local<Function> callback = Local<Function>::Cast(args[5]);
             const unsigned argc = 1;
             Local<Value> argv[argc] = { Local<Value>::New(result) };
             callback->Call(Context::GetCurrent()->Global(), argc, argv);

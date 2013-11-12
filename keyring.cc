@@ -184,12 +184,12 @@ Handle<Value> KeyRing::New(const Arguments& args){
 
 /*
 * Signature :
-* String message, String encoding (defaults to hex)
+* String message, String encoding (defaults to hex), Function callback (optional)
 */
 Handle<Value> KeyRing::Decrypt(const Arguments& args){
 	HandleScope scope;
 	//Checking the number of arguments given to the method
-	if (!(args.Length() == 1 || args.Length() == 2)){
+	if (!(args.Length() >= 1 && args.Length() <= 3)){
 		ThrowException(Exception::TypeError(String::New("Invalid number of parameters. Please check the module's documentation")));
 		return scope.Close(Undefined());
 	}
@@ -243,17 +243,26 @@ Handle<Value> KeyRing::Decrypt(const Arguments& args){
 		}
 	}
 	result = String::New(plaintext.c_str());
-	return scope.Close(result);
+	if (args.Length() < 3){
+		return scope.Close(result);
+	} else {
+		if (args[2]->IsUndefined()) return scope.Close(result);
+		Local<Function> callback = Local<Function>::Cast(args[2]);
+		const unsigned argc = 1;
+		Local<Value> argv[argc] = { Local<Value>::New(result) };
+		callback->Call(Context::GetCurrent()->Global(), argc, argv);
+		return scope.Close(Undefined());
+	}
 }
 
 /*
 * Signature :
-* String message, String signatureEncoding (defaults to hex), String hashFunctionName (either "sha1" or "sha256", defaults to "sha1")
+* String message, String signatureEncoding (defaults to hex), String hashFunctionName (either "sha1" or "sha256", defaults to "sha1"), Function callback (optional)
 */
 Handle<Value> KeyRing::Sign(const Arguments& args){
 	HandleScope scope;
 	//Checking the number of parameters
-	if (!(args.Length() == 1 || args.Length() == 2 || args.Length() == 3)){
+	if (!(args.Length() >= 1 && args.Length() <= 4)){
 		ThrowException(Exception::TypeError(String::New("Invalid number of parameters. Please check the module's documentation")));
 		return scope.Close(Undefined());
 	}
@@ -342,12 +351,21 @@ Handle<Value> KeyRing::Sign(const Arguments& args){
 		return scope.Close(Undefined());
 	}
 	result = String::New(signature.c_str());
-	return scope.Close(result);
+	if (args.Length() < 4){
+		return scope.Close(result);
+	} else {
+		if (args[3]->IsUndefined()) return scope.Close(result);
+		Local<Function> callback = Local<Function>::Cast(args[3]);
+		const unsigned argc = 1;
+		Local<Value> argv[argc] = { Local<Value>::New(result) };
+		callback->Call(Context::GetCurrent()->Global(), argc, argv);
+		return scope.Close(Undefined());
+	}
 }
 
 /*
 * Signature
-* Object pubKeyInfo
+* Object pubKeyInfo, Function callback (optional)
 */
 Handle<Value> KeyRing::Agree(const Arguments& args){
 	HandleScope scope;
@@ -397,23 +415,45 @@ Handle<Value> KeyRing::Agree(const Arguments& args){
 	SecByteBlock secret(dhDomain.AgreedValueLength());
 	dhDomain.Agree(secret, privateKey, publicKey);
 	result = String::New(SecByteBlockToHexStr(secret).c_str());
-	return scope.Close(result);
+	if (args.Length() == 1){
+		return scope.Close(result);
+	} else {
+		if (!args[1]->IsUndefined()) return scope.Close(result);
+		Local<Function> callback = Local<Function>::Cast(args[1]);
+		const unsigned argc = 1;
+		Local<Value> argv[argc] = { Local<Value>::New(result) };
+		callback->Call(Context::GetCurrent()->Global(), argc, argv);
+		return scope.Close(Undefined());
+	}
 }
 
-// No params
+// Function callback (optional)
 Handle<Value> KeyRing::PublicKeyInfo(const Arguments& args){
 	HandleScope scope;
+	if (args.Length() > 1){
+		ThrowException(Exception::TypeError(String::New("Invalid number of parameters")));
+		return scope.Close(Undefined());
+	}
 	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
 	if (instance->keyPair == 0){
 		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
 		return scope.Close(Undefined());
 	}
-	return scope.Close(instance->PPublicKeyInfo());
+	if (args.Length() == 0){
+		return scope.Close(instance->PPublicKeyInfo());
+	} else {
+		if (!args[0]->IsUndefined()) return scope.Close(instance->PPublicKeyInfo());
+		Local<Function> callback = Local<Function>::Cast(args[0]);
+		const unsigned argc = 1;
+		Local<Value> argv[argc] = { Local<Value>::New(instance->PPublicKeyInfo()) };
+		callback->Call(Context::GetCurrent()->Global(), argc, argv);
+		return scope.Close(Undefined());
+	}
 }
 
 /*
 * Signature
-* String keyType, Number/String keyOptions, String filename [optional], String passphrase [optional]
+* String keyType, Number/String keyOptions, String filename [optional], String passphrase [optional], Function callback [optional]
 */
 Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
 	HandleScope scope;
@@ -570,7 +610,17 @@ Handle<Value> KeyRing::CreateKeyPair(const Arguments& args){
 		instance->filename_ = filename;
 	}
 	//Building public key info object
-	return scope.Close(instance->PPublicKeyInfo());
+	Local<Object> pubKey = instance->PPublicKeyInfo();
+	if (args.Length() < 5){
+		return scope.Close(pubKey);
+	} else {
+		if (args[4]->IsUndefined()) return scope.Close(pubKey);
+		Local<Function> callback = Local<Function>::Cast(args[4]);
+		const unsigned argc = 1;
+		Local<Value> argv[argc] = { Local<Value>::New(pubKey) };
+		callback->Call(Context::GetCurrent()->Global(), argc, argv);
+		return scope.Close(pubKey);
+	}
 }
 
 Local<Object> KeyRing::PPublicKeyInfo(){
@@ -620,12 +670,12 @@ Local<Object> KeyRing::PPublicKeyInfo(){
 
 /*
 * Signature
-* String filename, String passphrase [optional]
+* String filename, String passphrase [optional], Function callback [freaking optional]
 */
 Handle<Value> KeyRing::Load(const Arguments& args){
 	HandleScope scope;
 	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
-	if (args.Length() == 1 || args.Length() == 2){
+	if (args.Length() >= 1 && args.Length() <= 3){
 		String::Utf8Value filenameVal(args[0]->ToString());
 		string filename(*filenameVal);
 		if (!doesFileExist(filename)){
@@ -640,15 +690,26 @@ Handle<Value> KeyRing::Load(const Arguments& args){
 			string passphrase(*passphraseVal);
 			instance->keyPair = loadKeyPair(filename, passphrase);
 		}
+		Local<Object> pubKey = instance->PPublicKeyInfo();
+		if (args.Length() < 3){
+			return scope.Close(pubKey);
+		} else {
+			if (args[2]->IsUndefined()) return scope.Close(pubKey);
+			Local<Function> callback = Local<Function>::Cast(args[2]);
+			const unsigned argc = 1;
+			Local<Value> argv[argc] = { Local<Value>::New (pubKey) };
+			callback->Call(Context::GetCurrent()->Global(), argc, argv);
+			return scope.Close(Undefined());
+		}
 	} else {
 		ThrowException(v8::Exception::TypeError(String::New("Invalid number of parameters")));
+		return scope.Close(Undefined());
 	}
-	return scope.Close(Undefined());
 }
 
 /*
 * Signature
-* String filename, String passphrase [optional]
+* String filename, String passphrase [optional], Function callback [optional]
 */
 Handle<Value> KeyRing::Save(const Arguments& args){
 	HandleScope scope;
@@ -657,7 +718,7 @@ Handle<Value> KeyRing::Save(const Arguments& args){
 		ThrowException(Exception::TypeError(String::New("No key has been loaded in the keyring. Either load a key on instanciation or by calling the Load() method")));
 		return scope.Close(Undefined());
 	}
-	if (args.Length() == 1 || args.Length() == 2){
+	if (args.Length() >= 1 && args.Length() <= 3){
 		String::Utf8Value filenameVal(args[0]->ToString());
 		std::string filename(*filenameVal);
 		if (args.Length() == 1){
@@ -666,6 +727,13 @@ Handle<Value> KeyRing::Save(const Arguments& args){
 			String::Utf8Value passphraseVal(args[1]->ToString());
 			std::string passphrase(*passphraseVal);
 			saveKeyPair(filename, instance->keyPair, passphrase);
+		}
+		//a callback is given, then call it |||| Screw the callback hell
+		if (args.Length() == 3 && !args[2]->IsUndefined()){
+			Local<Function> callback = Local<Function>::Cast(args[2]);
+			const unsigned argc = 0;
+			Local<Value> argv[argc];
+			callback->Call(Context::GetCurrent()->Global(), argc, argv);
 		}
 		return scope.Close(Undefined());
 	} else {
