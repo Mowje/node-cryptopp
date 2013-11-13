@@ -282,7 +282,7 @@ Handle<Value> KeyRing::Sign(const Arguments& args){
 	String::Utf8Value messageVal(args[0]->ToString());
 	string message, signature, encoding = "", hashFunctionName = "sha1";
 	message = string(*messageVal);
-	if (args.Length() == 2){
+	if (args.Length() >= 2 && !args[1]->IsUndefined()){
 		String::Utf8Value encodingVal(args[1]->ToString());
 		encoding = string(*encodingVal);
 		//Checking that the encoding parameter is valid
@@ -291,7 +291,7 @@ Handle<Value> KeyRing::Sign(const Arguments& args){
 			return scope.Close(Undefined());
 		}
 	}
-	if (args.Length() == 3){
+	if (args.Length() >= 3 && !args[2]->IsUndefined()){
 		String::Utf8Value hashFunctionNameVal(args[2]->ToString());
 		hashFunctionName = string(*hashFunctionNameVal);
 		if (!(hashFunctionName == "sha1" || hashFunctionName == "sha256")){
@@ -418,7 +418,7 @@ Handle<Value> KeyRing::Agree(const Arguments& args){
 	if (args.Length() == 1){
 		return scope.Close(result);
 	} else {
-		if (!args[1]->IsUndefined()) return scope.Close(result);
+		if (args[1]->IsUndefined()) return scope.Close(result);
 		Local<Function> callback = Local<Function>::Cast(args[1]);
 		const unsigned argc = 1;
 		Local<Value> argv[argc] = { Local<Value>::New(result) };

@@ -51,6 +51,8 @@ var eciesDecrypted = eciesKeyRing.decrypt(eciesCipher);
 //Unit test : checking that the plaintexts are the same
 //console.log('eciesMessage : ' + eciesMessage + '\neciesDecrypted : ' + eciesDecrypted);
 assert.equal(eciesDecrypted == eciesMessage, true, 'ERROR : ECIES plaintexts are not the same');
+eciesKeyRing.clear();
+eciesKeyRing2.clear();
 
 console.log('\n### ECDH ###');
 var ecdhKeyRing = new cryptopp.KeyRing();
@@ -68,6 +70,9 @@ console.log('ECDH secret 1 : ' + secret1 + '\nECDH secret 2 : ' + secret2);
 if (secret1 !== secret2){
 	throw new TypeError('ERROR : ECDH shared secrets are different!');
 }
+ecdhKeyRing.clear();
+ecdhKeyRing2.clear();
+ecdhKeyRing3.clear();
 
 console.log('\n### RSA ###');
 var rsaKeyRing = new cryptopp.KeyRing();
@@ -75,7 +80,7 @@ var rsaPubKey = rsaKeyRing.createKeyPair("rsa", 2048);
 var rsaPubKey2 = rsaKeyRing.publicKeyInfo();
 console.log('RSA public key : ' + JSON.stringify(rsaPubKey));
 assert.equal(rsaPubKey.modulus == rsaPubKey2.modulus && rsaPubKey.publicExponent == rsaPubKey2.publicExponent, true, 'ERROR : .createKeyPair() & .publicKeyInfo() don\'t return the public key info object');
-var rsaMessage = 'message to be encrypted and signed  with RSA';
+var rsaMessage = 'message to be encrypted and signed with RSA';
 var rsaCipher = cryptopp.rsa.encrypt(rsaMessage, rsaPubKey.modulus, rsaPubKey.publicExponent);
 var rsaSignature = rsaKeyRing.sign(rsaCipher);
 var isSignatureValid = cryptopp.rsa.verify(rsaCipher, rsaSignature, rsaPubKey.modulus, rsaPubKey.publicExponent);
@@ -87,11 +92,21 @@ var rsaKeyRing2 = new cryptopp.KeyRing();
 rsaKeyRing2.load('./rsaKeyRing.key');
 var rsaPubKey3 = rsaKeyRing2.publicKeyInfo();
 assert.equal(rsaPubKey3.modulus == rsaPubKey.modulus && rsaPubKey3.publicExponent == rsaPubKey.publicExponent, true, 'ERROR : generated key and loaded key are not the same');
+rsaKeyRing.clear();
+rsaKeyRing2.clear();
 
 console.log('\n### DSA ###');
+var dsaMessage = 'message to be signed by DSA';
 var dsaKeyRing = new cryptopp.KeyRing();
-var dsaPubKey = dsaKeyRing.createKeyPair('dsa', 2048);
+var dsaPubKey = dsaKeyRing.createKeyPair('dsa', 2048, './dsaKeyRing.key');
 console.log('DSA key pair : ' + JSON.stringify(dsaPubKey));
+var dsaKeyRing2 = new cryptopp.KeyRing();
+dsaKeyRing2.load('./dsaKeyRing.key');
+var dsaSignature = dsaKeyRing.sign(dsaMessage);
+var isDsaValid = cryptopp.dsa.verify(dsaMessage, dsaSignature, dsaPubKey.primeField, dsaPubKey.divider, dsaPubKey.base, dsaPubKey.publicElement);
+assert.equal(isDsaValid, true, 'ERROR : DSA signature seems invalid');
+dsaKeyRing.clear();
+dsaKeyRing2.clear();
 
 console.log('--------------------------');
 console.log('End of KeyRing test script');
