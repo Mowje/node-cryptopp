@@ -217,13 +217,13 @@ __cryptopp.randomBytes(length, [encoding])__ :
 
 Do not use these, they're probably [broken](https://github.com/Tashweesh/node-cryptopp/issues/2).
 
-~~Although there are already ways to encode/decode to hex/base64 in Node.js, I wrote bindings to the implementations in Crypto++
+~~Although there are already ways to encode/decode to hex/base64 in Node.js, I wrote bindings to the implementations in Crypto++~~
 
-* __hex.encode(text)__ : Encode the text to hexadecimal
-* __hex.decode(encoded)__ : Decode the hex encoded text
+* ~~__hex.encode(text)__ : Encode the text to hexadecimal~~
+* ~~__hex.decode(encoded)__ : Decode the hex encoded text~~
 
-* __base64.encode(text)__ : Encode the text to Base64
-* __base64.decode(encoded)__ : Decode the Base64 encoded text~~
+* ~~__base64.encode(text)__ : Encode the text to Base64~~
+* ~~__base64.decode(encoded)__ : Decode the Base64 encoded text~~
 
 ## Keypair file format
 
