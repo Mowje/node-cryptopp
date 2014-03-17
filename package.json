@@ -1,15 +1,15 @@
 {
   "name": "cryptopp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Node.js static bindings for the Crypto++ library",
   "main": "node-cryptopp.js",
   "scripts": {
     "test": "node test.js",
-    "install": "make build"
+    "preinstall": "make build"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/BatikhSouri/node-cryptopp.git"
+    "url": "https://github.com/Tashweesh/node-cryptopp.git"
   },
   "keywords": [
     "crypto",
@@ -17,13 +17,15 @@
     "rsa",
     "dsa",
     "ecdsa",
+    "ecies",
+    "ecdh",
     "cryptopp",
     "crypto++"
   ],
   "author": "Batikh Souri",
-  "license": "GPLv2",
+  "license": "MIT",
   "gypfile": true,
   "bugs": {
-    "url": "https://github.com/BatikhSouri/node-cryptopp/issues"
+    "url": "https://github.com/Tashweesh/node-cryptopp/issues"
   }
 }
