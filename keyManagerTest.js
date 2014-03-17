@@ -20,8 +20,8 @@ console.log('ECDSA public key (after loading the key file in an other ring): ' +
 //Unit test, checking that the key has been loaded correctly
 assert.equal(ecdsaPubKey2.publicKey.x == ecdsaPubKey.publicKey.x && ecdsaPubKey2.publicKey.y == ecdsaPubKey.publicKey.y && ecdsaPubKey2.curveName == ecdsaPubKey.curveName, true, 'ERROR : generated key and loaded key are not the same');
 //Signing the message
-var ecdsaSignature = ecdsaKeyRing.sign(ecdsaMessage);
-var isEcdsaValid = cryptopp.ecdsa.prime.verify(ecdsaMessage, ecdsaSignature, ecdsaPubKey.publicKey, ecdsaPubKey.curveName);
+var ecdsaSignature = ecdsaKeyRing.sign(ecdsaMessage, undefined, 'sha256');
+var isEcdsaValid = cryptopp.ecdsa.prime.verify(ecdsaMessage, ecdsaSignature, ecdsaPubKey.publicKey, ecdsaPubKey.curveName, 'sha256');
 console.log('Is ECDSA signature valid : ' + isEcdsaValid);
 //Unit test : invalid signature
 assert.equal(isEcdsaValid, true, 'ERROR : the ECDSA signature seems invalid');
@@ -82,8 +82,8 @@ console.log('RSA public key : ' + JSON.stringify(rsaPubKey));
 assert.equal(rsaPubKey.modulus == rsaPubKey2.modulus && rsaPubKey.publicExponent == rsaPubKey2.publicExponent, true, 'ERROR : .createKeyPair() & .publicKeyInfo() don\'t return the public key info object');
 var rsaMessage = 'message to be encrypted and signed with RSA';
 var rsaCipher = cryptopp.rsa.encrypt(rsaMessage, rsaPubKey.modulus, rsaPubKey.publicExponent);
-var rsaSignature = rsaKeyRing.sign(rsaCipher);
-var isSignatureValid = cryptopp.rsa.verify(rsaCipher, rsaSignature, rsaPubKey.modulus, rsaPubKey.publicExponent);
+var rsaSignature = rsaKeyRing.sign(rsaCipher, undefined, 'sha256');
+var isSignatureValid = cryptopp.rsa.verify(rsaCipher, rsaSignature, rsaPubKey.modulus, rsaPubKey.publicExponent, 'sha256');
 var rsaDecrypted = rsaKeyRing.decrypt(rsaCipher);
 assert.equal(rsaMessage, rsaDecrypted, 'ERROR : RSA plaintexts are not the same');
 assert.equal(isSignatureValid, true, 'ERROR : Invalid RSA signature');

@@ -12,12 +12,12 @@
     "url": "https://github.com/BatikhSouri/node-cryptopp.git"
   },
   "keywords": [
-    "nodejs",
-    "node",
+    "crypto",
+    "cryptography",
+    "rsa",
+    "dsa",
+    "ecdsa",
     "cryptopp",
-    "lib",
-    "binding",
-    "c++",
     "crypto++"
   ],
   "author": "Batikh Souri",
