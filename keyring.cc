@@ -1,5 +1,3 @@
-#define BUILDING_NODE_EXTENSION
-
 //Std imports
 #include <string>
 #include <iostream>
@@ -10,15 +8,15 @@
 #include <utility>
 
 //Crypto++ imports
-#include <cryptopp/base64.h>
+#include <base64.h>
 using CryptoPP::Base64Encoder;
 using CryptoPP::Base64Decoder;
 
-#include <cryptopp/hex.h>
+#include <hex.h>
 using CryptoPP::HexEncoder;
 using CryptoPP::HexDecoder;
 
-#include <cryptopp/filters.h>
+#include <filters.h>
 using CryptoPP::StringSource;
 using CryptoPP::StringSink;
 using CryptoPP::ArraySink;
@@ -28,11 +26,11 @@ using CryptoPP::StreamTransformationFilter;
 using CryptoPP::PK_EncryptorFilter;
 using CryptoPP::PK_DecryptorFilter;
 
-#include <cryptopp/sha.h>
+#include <sha.h>
 using CryptoPP::SHA1;
 using CryptoPP::SHA256;
 
-#include <cryptopp/eccrypto.h>
+#include <eccrypto.h>
 using CryptoPP::ECP;
 using CryptoPP::EC2N;
 using CryptoPP::ECPPoint;
@@ -44,7 +42,7 @@ using CryptoPP::DL_GroupParameters_EC;
 using CryptoPP::DL_GroupPrecomputation;
 using CryptoPP::DL_FixedBasePrecomputation;
 
-#include <cryptopp/rsa.h>
+#include <rsa.h>
 using CryptoPP::RSA;
 using CryptoPP::RSAFunction;
 using CryptoPP::InvertibleRSAFunction;
@@ -52,30 +50,30 @@ using CryptoPP::RSASS;
 using CryptoPP::RSAES_OAEP_SHA_Encryptor;
 using CryptoPP::RSAES_OAEP_SHA_Decryptor;
 
-#include <cryptopp/pssr.h>
+#include <pssr.h>
 using CryptoPP::PSS;
 
-#include <cryptopp/dsa.h>
+#include <dsa.h>
 using CryptoPP::DSA;
 
-#include <cryptopp/osrng.h>
+#include <osrng.h>
 using CryptoPP::AutoSeededRandomPool;
 using CryptoPP::AutoSeededX917RNG;
 
-#include <cryptopp/asn.h>
+#include <asn.h>
 using CryptoPP::OID;
-#include <cryptopp/oids.h>
+#include <oids.h>
 
-#include <cryptopp/secblock.h>
+#include <secblock.h>
 using CryptoPP::SecByteBlock;
 
-#include <cryptopp/pwdbased.h>
+#include <pwdbased.h>
 using CryptoPP::PKCS5_PBKDF2_HMAC;
 
-#include <cryptopp/aes.h>
+#include <aes.h>
 using CryptoPP::AES;
 
-#include <cryptopp/modes.h>
+#include <modes.h>
 using CryptoPP::CFB_Mode;
 
 //Node and class headers import
