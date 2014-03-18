@@ -10,6 +10,7 @@ endef
 
 clean:
 	rm -rf build
+	rm *.key
 	cd cryptopp; \
 	make clean
 
