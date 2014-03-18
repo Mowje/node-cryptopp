@@ -5,7 +5,7 @@
   "main": "node-cryptopp.js",
   "scripts": {
     "test": "node test.js",
-    "preinstall": "make build"
+    "preinstall": "make git-pull && make build"
   },
   "repository": {
     "type": "git",
