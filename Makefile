@@ -20,6 +20,11 @@ git-pull:
 	git submodule update
 	git submodule status
 
+git-getcryptopp:
+	git init
+	git submodule add https://github.com/Tashweesh/cryptopp.git
+	git submodule update
+
 build:
 	cd cryptopp; \
 	make
