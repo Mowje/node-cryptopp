@@ -32,6 +32,7 @@ private:
 	static bool saveKeyPair(std::string const& filename, std::map<std::string, std::string>* keyPair, std::string passphrase = "");
 	//Encode/Decoding the file buffer
 	static std::map<std::string, std::string>* decodeBuffer(std::string const& fileBuffer);
+	//static std::map<std::string, std::string>* decodeBufferLegacy(std::string const& fileBuffer);
 	static std::string encodeBuffer(std::map<std::string, std::string>* keyPair);
 	//char / curveName conversions
 	static char getCurveID(std::string curveName);

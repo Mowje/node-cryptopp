@@ -783,6 +783,19 @@ bool KeyRing::doesFileExist(std::string const& filename){
 	return isGood;
 }
 
+/*map<string, string>* KeyRing::decodeBuffer(string const* fileBuffer){
+	map<string, string>* keyPair;
+	stringstream file(fileBuffer);
+	stringbuf* buffer = file.rdbuf();
+	char keyType = buffer->sbumpc();
+	if (keyType == 0x00 || keyType == 0x04){ //ECDSA / ECIES keys
+		char curveID = buffer->sbumpc();
+		string curveName = getCurveName(curveID);
+		unsigned short publicXLength, publicYLength, privateKeyLength;
+
+	}
+}*/
+
 map<string, string>* KeyRing::decodeBuffer(string const& fileBuffer){
 	map<string, string>* keyPair;
 	stringstream file(fileBuffer);
