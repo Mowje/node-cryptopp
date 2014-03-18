@@ -15,7 +15,8 @@ All the crypto methods could be used in sync/async mode
 
 ## Requirements
 * [node.js](http://nodejs.org), obviously..
-* [Crypto++](http://cryptopp.com), that could be installed on Linux [rather easily](http://cryptopp.com/wiki/Linux#Distribution_Package)
+* [node-gyp](https://github.com/TooTallNate/node-gyp)
+* ~~[Crypto++](http://cryptopp.com), that could be installed on Linux [rather easily](http://cryptopp.com/wiki/Linux#Distribution_Package)~~ (Not a requirement anymore. v0.2.1 is all about having Crypto++ as a submodule)
 
 ## Installation
 
