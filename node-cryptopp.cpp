@@ -682,7 +682,7 @@ Handle<Value> ecdsaSignMessageP(const Arguments& args){
             if (!args[3]->IsUndefined()){
                 String::Utf8Value hashNameVal(args[3]->ToString());
                 hashName = std::string(*hashNameVal);
-                if (!(hashName == "sha1" || hashName == "sah256")){
+                if (!(hashName == "sha1" || hashName == "sha256")){
                     ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
                     return scope.Close(Undefined());
                 }
@@ -697,7 +697,7 @@ Handle<Value> ecdsaSignMessageP(const Arguments& args){
             ECDSA<ECP, SHA1>::PrivateKey privateKey;
             privateKey.Initialize(prng, curve);
             privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
-            StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA256>::Signer(privateKey), new StringSink(signature)));
+            StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA1>::Signer(privateKey), new StringSink(signature)));
         } else {
             ECDSA<ECP, SHA256>::PrivateKey privateKey;
             privateKey.Initialize(prng, curve);
