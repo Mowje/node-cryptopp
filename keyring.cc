@@ -93,7 +93,7 @@ KeyRing::KeyRing(string filename, string passphrase) : filename_(filename), keyP
 			return;
 		}
 		if (passphrase != ""){
-			loadKeyPair(filename, passphrase);
+			loadKeyPair(filename, false, passphrase);
 		} else {
 			loadKeyPair(filename);
 		}
@@ -668,12 +668,12 @@ Local<Object> KeyRing::PPublicKeyInfo(){
 
 /*
 * Signature
-* String filename, String passphrase [optional], Function callback [freaking optional]
+* String filename, Boolean legacy, String passphrase, Function callback [freaking optional]
 */
 Handle<Value> KeyRing::Load(const Arguments& args){
 	HandleScope scope;
 	KeyRing* instance = ObjectWrap::Unwrap<KeyRing>(args.This());
-	if (args.Length() >= 1 && args.Length() <= 3){
+	if (args.Length() >= 1 && args.Length() <= 4){
 		String::Utf8Value filenameVal(args[0]->ToString());
 		string filename(*filenameVal);
 		if (!doesFileExist(filename)){
@@ -681,15 +681,26 @@ Handle<Value> KeyRing::Load(const Arguments& args){
 			return scope.Close(Undefined());
 		}
 		//If I put a try block here, what kind of exceptions should I catch. I simply don't get it.
-		if (args.Length() == 1){ //If no passphrase is given
+		bool isLegacy = false;
+		string passphrase = "";
+		if (args.Length() >= 2){
+			bool isLegacyVal = args[1]->BooleanValue();
+			isLegacy = isLegacyVal;
+		}
+		if (args.Length() >= 3){
+			String::Utf8Value passphraseVal(args[2]->ToString());
+			passphrase = string(*passphraseVal);
+		}
+		/*if (args.Length() == 1){ //If no passphrase is given
 			instance->keyPair = loadKeyPair(filename);
 		} else { //If a passphrase is given
 			String::Utf8Value passphraseVal(args[1]->ToString());
 			string passphrase(*passphraseVal);
 			instance->keyPair = loadKeyPair(filename, passphrase);
-		}
+		}*/
+		instance->keyPair = loadKeyPair(filename, isLegacy, passphrase);
 		Local<Object> pubKey = instance->PPublicKeyInfo();
-		if (args.Length() < 3){
+		if (args.Length() < 4){
 			return scope.Close(pubKey);
 		} else {
 			if (args[2]->IsUndefined()) return scope.Close(pubKey);
@@ -751,16 +762,18 @@ Handle<Value> KeyRing::Clear(const Arguments& args){
 	return scope.Close(Undefined());
 }
 
-map<string, string>* KeyRing::loadKeyPair(string const& filename, string passphrase){
+map<string, string>* KeyRing::loadKeyPair(string const& filename, bool legacy, string passphrase){
 	string fileContent;
 	if (passphrase != ""){ //If passphrase is defined, then decrypt file
 		fileContent = decryptFile(filename, passphrase);
 	} else {
 		std::fstream file(filename.c_str(), ios::in);
 		std::getline(file, fileContent);
-		fileContent = strHexDecode(fileContent);
+		if (legacy) fileContent = strHexDecode(fileContent);
 	}
-	map<string, string>* keyPair = decodeBuffer(fileContent);
+	map<string, string>* keyPair;
+	if (legacy) keyPair = decodeBufferLegacy(fileContent);
+	else keyPair = decodeBuffer(fileContent);
 	return keyPair;
 }
 
@@ -770,7 +783,7 @@ bool KeyRing::saveKeyPair(string const& filename, map<string, string>* keyPair, 
 		encryptFile(filename, buffer, passphrase);
 	} else {
 		std::fstream file(filename.c_str(), std::ios::out | std::ios::trunc);
-		file << strHexEncode(buffer);
+		file << buffer;
 		file.close();
 	}
 	return true;
@@ -783,7 +796,7 @@ bool KeyRing::doesFileExist(std::string const& filename){
 	return isGood;
 }
 
-/*map<string, string>* KeyRing::decodeBuffer(string const* fileBuffer){
+map<string, string>* KeyRing::decodeBuffer(string const& fileBuffer){
 	map<string, string>* keyPair;
 	stringstream file(fileBuffer);
 	stringbuf* buffer = file.rdbuf();
@@ -792,11 +805,112 @@ bool KeyRing::doesFileExist(std::string const& filename){
 		char curveID = buffer->sbumpc();
 		string curveName = getCurveName(curveID);
 		unsigned short publicXLength, publicYLength, privateKeyLength;
+		string publicX = "", publicY = "", privateKey = "";
+		publicXLength = ((unsigned short) buffer->sbumpc()) << 8;
+		publicXLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < publicXLength; i++){
+			publicX += (char) buffer->sbumpc();
+		}
+		publicYLength = ((unsigned short) buffer->sbumpc()) << 8;
+		publicYLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < publicYLength; i++){
+			publicY += (char) buffer->sbumpc();
+		}
+		privateKeyLength = ((unsigned short) buffer->sbumpc()) << 8;
+		privateKeyLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < privateKeyLength; i++){
+			privateKey += (char) buffer->sbumpc();
+		}
+		keyPair = new map<string, string>();
+		if (keyType == 0x00) keyPair->insert(make_pair("keyType", "ecdsa"));
+		else keyPair->insert(make_pair("keyType", "ecies"));
+		keyPair->insert(make_pair("curveName", curveName));
+		keyPair->insert(make_pair("publicKeyX", publicX));
+		keyPair->insert(make_pair("publicKeyY", publicY));
+		keyPair->insert(make_pair("privateKey", privateKey));
+	} else if (keyType == 0x01){ //RSA keys
+		unsigned short modulusLength, publicExpLength, privateExpLength;
+		string modulus = "", publicExponent = "", privateExponent = "";
+		modulusLength = ((unsigned short) buffer->sbumpc()) << 8;
+		modulusLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < modulusLength; i++){
+			modulus += (char) buffer->sbumpc();
+		}
+		publicExpLength = ((unsigned short) buffer->sbumpc()) << 8;
+		publicExpLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < publicExpLength; i++){
+			publicExponent += (char) buffer->sbumpc();
+		}
+		privateExpLength = ((unsigned short) buffer->sbumpc()) << 8;
+		privateExpLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < privateExpLength; i++){
+			privateExponent += (char) buffer->sbumpc();
+		}
+		keyPair = new map<string, string>();
+		keyPair->insert(make_pair("keyType", "rsa"));
+		keyPair->insert(make_pair("modulus", modulus));
+		keyPair->insert(make_pair("publicExponent", publicExponent));
+		keyPair->insert(make_pair("privateExponent", privateExponent));
+	} else if (keyType == 0x02){ //DSA keys
+		unsigned short primeFieldLength, dividerLength, baseLength, publicElementLength, privateExponentLength;
+		string primeField = "", divider = "", base = "", publicElement = "", privateExponent = "";
+		primeFieldLength = ((unsigned short) buffer->sbumpc()) << 8;
+		primeFieldLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < primeFieldLength; i++){
+			primeField += (char) buffer->sbumpc();
+		}
+		dividerLength = ((unsigned short) buffer->sbumpc()) << 8;
+		dividerLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < dividerLength; i++){
+			divider += (char) buffer->sbumpc();
+		}
+		baseLength = ((unsigned short) buffer->sbumpc()) << 8;
+		baseLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < baseLength; i++){
+			base += (char) buffer->sbumpc();
+		}
+		publicElementLength = ((unsigned short) buffer->sbumpc()) << 8;
+		publicElementLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < publicElementLength; i++){
+			publicElement += (char) buffer->sbumpc();
+		}
+		privateExponentLength = ((unsigned short) buffer->sbumpc()) << 8;
+		privateExponentLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < privateExponentLength; i++){
+			privateExponent += (char) buffer->sbumpc();
+		}
+		keyPair = new map<string, string>();
+		keyPair->insert(make_pair("keyType", "dsa"));
+		keyPair->insert(make_pair("primeField", primeField));
+		keyPair->insert(make_pair("divider", divider));
+		keyPair->insert(make_pair("base", base));
+		keyPair->insert(make_pair("publicElement", publicElement));
+		keyPair->insert(make_pair("privateExponent", privateExponent));
+	} else if (keyType == 0x03){ //ECDH keys
+		char curveID = buffer->sbumpc();
+		string curveName = getCurveName(curveID);
+		unsigned short publicKeyLength, privateKeyLength;
+		string publicKey = "", privateKey = "";
+		publicKeyLength = ((unsigned short) buffer->sbumpc()) << 8;
+		publicKeyLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < publicKeyLength; i++){
+			publicKey += (char) buffer->sbumpc();
+		}
+		privateKeyLength = ((unsigned short) buffer->sbumpc()) << 8;
+		privateKeyLength += (unsigned short) buffer->sbumpc();
+		for (int i = 0; i < privateKeyLength; i++){
+			privateKey += (char) buffer->sbumpc();
+		}
+		keyPair = new map<string, string>();
+		keyPair->insert(make_pair("keyType", "ecdh"));
+		keyPair->insert(make_pair("curveName", curveName));
+		keyPair->insert(make_pair("publicKey", publicKey));
+		keyPair->insert(make_pair("privateKey", privateKey));
+	} else throw new runtime_error("Unknown key type");
+	return keyPair;
+}
 
-	}
-}*/
-
-map<string, string>* KeyRing::decodeBuffer(string const& fileBuffer){
+map<string, string>* KeyRing::decodeBufferLegacy(string const& fileBuffer){
 	map<string, string>* keyPair;
 	stringstream file(fileBuffer);
 	stringbuf* buffer = file.rdbuf();
@@ -921,7 +1035,6 @@ map<string, string>* KeyRing::decodeBuffer(string const& fileBuffer){
 string KeyRing::encodeBuffer(map<string, string>* keyPair){
 	stringstream buffer;
 	if (!(keyPair->count("keyType") > 0)) throw new runtime_error("keyType not found");
-	buffer << "key";
 	string keyType = keyPair->at("keyType");
 	if (keyType == "ecdsa" || keyType == "ecies"){
 		//Checking key pair integrality
@@ -939,17 +1052,18 @@ string KeyRing::encodeBuffer(map<string, string>* keyPair){
 		char curveID = getCurveID(keyPair->at("curveName"));
 		buffer << curveID;
 		string publicX = keyPair->at("publicKeyX"), publicY = keyPair->at("publicKeyY"), privateKey = keyPair->at("privateKey");
+		//if (publicX.length() > ) //Checking lengths...
 		//Writing publicKey.x
-		buffer << (char) (publicX.length() >> 8);
-		buffer << (char) publicX.length();
+		buffer << (unsigned char) (publicX.length() >> 8);
+		buffer << (unsigned char) publicX.length();
 		buffer << publicX;
 		//Writing publicKey.y
-		buffer << (char) (publicY.length() >> 8);
-		buffer << (char) publicY.length();
+		buffer << (unsigned char) (publicY.length() >> 8);
+		buffer << (unsigned char) publicY.length();
 		buffer << publicY;
 		//Writing privateKey
-		buffer << (char) (privateKey.length() >> 8);
-		buffer << (char) privateKey.length();
+		buffer << (unsigned char) (privateKey.length() >> 8);
+		buffer << (unsigned char) privateKey.length();
 		buffer << privateKey;
 	} else if (keyType == "rsa"){
 		//Checking key pair integrality
@@ -961,16 +1075,16 @@ string KeyRing::encodeBuffer(map<string, string>* keyPair){
 		buffer << (char) 0x01;
 		string modulus = keyPair->at("modulus"), publicExponent = keyPair->at("publicExponent"), privateExponent = keyPair->at("privateExponent");
 		//Writing the modulus
-		buffer << (char) (modulus.length() >> 8);
-		buffer << (char) modulus.length();
+		buffer << (unsigned char) (modulus.length() >> 8);
+		buffer << (unsigned char) modulus.length();
 		buffer << modulus;
 		//Writing the public exponent
-		buffer << (char) (publicExponent.length() >> 8);
-		buffer << (char) publicExponent.length();
+		buffer << (unsigned char) (publicExponent.length() >> 8);
+		buffer << (unsigned char) publicExponent.length();
 		buffer << publicExponent;
 		//Writing the private exponent
-		buffer << (char) (privateExponent.length() >> 8);
-		buffer << (char) privateExponent.length();
+		buffer << (unsigned char) (privateExponent.length() >> 8);
+		buffer << (unsigned char) privateExponent.length();
 		buffer << privateExponent;
 	} else if (keyType == "dsa"){
 		//Checking key pair integrality
@@ -982,24 +1096,24 @@ string KeyRing::encodeBuffer(map<string, string>* keyPair){
 		buffer << (char) 0x02;
 		string primeField = keyPair->at("primeField"), divider = keyPair->at("divider"), base = keyPair->at("base"), publicElement = keyPair->at("publicElement"), privateExponent = keyPair->at("privateExponent");
 		//Writing the primeField
-		buffer << (char) (primeField.length() >> 8);
-		buffer << (char) primeField.length();
+		buffer << (unsigned char) (primeField.length() >> 8);
+		buffer << (unsigned char) primeField.length();
 		buffer << primeField;
 		//Writing the divider
-		buffer << (char) (divider.length() >> 8);
-		buffer << (char) divider.length();
+		buffer << (unsigned char) (divider.length() >> 8);
+		buffer << (unsigned char) divider.length();
 		buffer << divider;
 		//Writing the base
-		buffer << (char) (base.length() >> 8);
-		buffer << (char) base.length();
+		buffer << (unsigned char) (base.length() >> 8);
+		buffer << (unsigned char) base.length();
 		buffer << base;
 		//Writing the publicElement
-		buffer << (char) (publicElement.length() >> 8);
-		buffer << (char) publicElement.length();
+		buffer << (unsigned char) (publicElement.length() >> 8);
+		buffer << (unsigned char) publicElement.length();
 		buffer << publicElement;
 		//Writing the privateExponent
-		buffer << (char) (privateExponent.length() >> 8);
-		buffer << (char) privateExponent.length();
+		buffer << (unsigned char) (privateExponent.length() >> 8);
+		buffer << (unsigned char) privateExponent.length();
 		buffer << privateExponent;
 	} else if (keyType == "ecdh"){
 		string params[] = {"curveName", "publicKey", "privateKey"};
@@ -1013,12 +1127,12 @@ string KeyRing::encodeBuffer(map<string, string>* keyPair){
 		char curveID = getCurveID(curveName);
 		buffer << curveID;
 		//Writing the public key
-		buffer << (char) (publicKey.length() >> 8);
-		buffer << (char) publicKey.length();
+		buffer << (unsigned char) (publicKey.length() >> 8);
+		buffer << (unsigned char) publicKey.length();
 		buffer << publicKey;
 		//Writing the private key
-		buffer << (char) (privateKey.length() >> 8);
-		buffer << (char) privateKey.length();
+		buffer << (unsigned char) (privateKey.length() >> 8);
+		buffer << (unsigned char) privateKey.length();
 		buffer << privateKey;
 	} else throw new runtime_error("Unknown key type");
 	return buffer.str();
@@ -1240,17 +1354,17 @@ void KeyRing::encryptFile(std::string const& filename, std::string content, std:
 	aesKeySize /= 8;
 	AutoSeededRandomPool prng;
 	//Generating pbkdf salt
-	cout << "Generating salt" << endl;
+	//cout << "Generating salt" << endl;
 	byte salt[16];
 	prng.GenerateBlock(salt, sizeof(salt));
 	//Copying passphrase to byte array
-	cout << "Copying passphrase to array" << endl;
+	//cout << "Copying passphrase to array" << endl;
 	byte passphraseArray[passphrase.size()];
 	for (int i = 0; i < sizeof(passphraseArray); i++){
 		passphraseArray[i] = passphrase[i];
 	}
 	//Calculating key
-	cout << "Calculating key" << endl;
+	//cout << "Calculating key" << endl;
 	byte key[aesKeySize];
 	PKCS5_PBKDF2_HMAC<SHA1> derivation;
 	derivation.DeriveKey(key, sizeof(key), 0, passphraseArray, sizeof(passphraseArray), salt, sizeof(salt), pbkdfIterations);
@@ -1258,14 +1372,14 @@ void KeyRing::encryptFile(std::string const& filename, std::string content, std:
 	byte iv[AES::BLOCKSIZE];
 	prng.GenerateBlock(iv, sizeof(iv));
 	//Encrypt content
-	cout << "Initializing encryptor" << endl;
+	//cout << "Initializing encryptor" << endl;
 	CFB_Mode<AES>::Encryption e;
 	e.SetKeyWithIV(key, sizeof(key), iv);
 	string encrypted;
-	cout << "Encrypting the buffer" << endl;
+	//cout << "Encrypting the buffer" << endl;
 	StringSource(content, true, new StreamTransformationFilter(e, new StringSink(encrypted)));
 	//Opening file and writing content
-	cout << "Writing file" << endl;
+	//cout << "Writing file" << endl;
 	fstream file(filename.c_str(), ios::out | ios::trunc);
 	file << bufferHexEncode(salt, sizeof(salt));
 	file << std::endl;

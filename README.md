@@ -115,8 +115,8 @@ Returns an object containing public key information from the currently loaded ke
 		* publicKey : the ECDH public key
 * `save(filename, [passphrase], [callback])`  
 Save the keypair to the given filename. DON'T USE THE PASSPHRASE! No paramter passed to the callback
-* `load(filename, [passphrase], [callback])`  
-Load the keypair from the given path. DON'T USE THE PASSPHRASE! The callback receives the public key information object
+* `load(filename, [legacy], [passphrase], [callback])`  
+Load the keypair from the given path. Legacy is a boolean, determining whether the file is in the old key file format (prior to v0.2.2) DON'T USE THE PASSPHRASE! The callback receives the public key information object
 * `clear()`  
 Deletes the keypair from memory. You **MUST** call this method once you're done working the keyring.
 
@@ -234,40 +234,40 @@ Although there are already ways to encode/decode to hex/base64 in Node.js, I wro
 
 ## Keypair file format
 
-Here is how a keypair file is built. Note that every number is in written in big endian
+Here is how a keypair file is built. Note that every number is in written in big endian. Note that the format has changed slightly as of v0.2.2 to homogenize it [node-sodium](https://github.com/Tashweesh/node-sodium.git)'s format and to ease the integration of both modules into [node-hpka](https://github.com/Tashweesh/node-hpka.git). For reference, here is the [old key file format](https://github.com/Tashweesh/node-cryptopp/tree/master/OldKeyFileFormat.md).
 
 * algoType : a byte; 0x00 for ECDSA, 0x01 for RSA, 0x02 for DSA, 0x03 for ECDH, 0x04 for ECIES
 * if keyType is ECDSA or ECIES
 	* curveID : a byte, corresponding to the curve used
-	* publicKeyX.length : length of the x coordinate of the public point (2 bytes, signed integer)
+	* publicKeyX.length : length of the x coordinate of the public point (2 bytes, unsigned integer)
 	* publicKeyX : x coordinate of the public point
-	* publicKeyY.length : length of the y coordinate of the public point (2 bytes, signed integer)
+	* publicKeyY.length : length of the y coordinate of the public point (2 bytes, unsigned integer)
 	* publicKeyY : y coordinate of the public point
-	* privateKey.length : length of the private key (2 bytes)
+	* privateKey.length : length of the private key (2 bytes, unsigned integer)
 	* privateKey
 * if keyType is RSA
-	* modulus.length : length of the RSA modulus (2 bytes, signed integer)
+	* modulus.length : length of the RSA modulus (2 bytes, unsigned integer)
 	* modulus : RSA modulus
-	* publicExponent.length : length of the public exponent (2 bytes, signed integer)
+	* publicExponent.length : length of the public exponent (2 bytes, unsigned integer)
 	* publicExponent : RSA public exponent (or public key)
-	* privateExponent.length : length of the private exponent (2 bytes, signed integer)
+	* privateExponent.length : length of the private exponent (2 bytes, unsigned integer)
 	* privateExponent : RSA private exponent (or private key)
 * if keyType is DSA
-	* primeField.length : length of the prime field used by the DSA key pair (2 bytes, signed integer)
+	* primeField.length : length of the prime field used by the DSA key pair (2 bytes, unsigned integer)
 	* primeField
-	* divider.length : length of the divider (2 bytes, signed integer)
+	* divider.length : length of the divider (2 bytes, unsigned integer)
 	* divider
-	* base.length : length of the base (2 bytes, signed integer)
+	* base.length : length of the base (2 bytes, unsigned integer)
 	* base : DSA base
-	* publicElement.length : length of the DSA public key (2 bytes, signed integer)
+	* publicElement.length : length of the DSA public key (2 bytes, unsigned integer)
 	* publicElement : DSA public key
-	* privateExponent.length : length of the DSA private exponent (2 bytes, signed integer)
-	* privateExponent : DSA private exponent (or private key)
+	* privateExponent.length : length of the DSA private exponent (2 bytes, unsigned integer)
+	* privateExponent : DSA private exponent (ie, the private key)
 * if keyType is ECDH
 	* curveID : a byte, corresponding to the curve used
-	* publicKey.length : length of the ECDH public key (2 bytes, signed integer)
+	* publicKey.length : length of the ECDH public key (2 bytes, unsigned integer)
 	* publicKey : ECDH public key
-	* privateKey.length : length of the ECDH private key (2 bytes, signed integer)
+	* privateKey.length : length of the ECDH private key (2 bytes, unsigned integer)
 	* privateKey : ECDH private key
 
 #### CruveName <-> CurveID
@@ -310,4 +310,4 @@ Here is how a keypair file is built. Note that every number is in written in big
 
 ## License
 
-This module is licensed under GPLv2.
+This module is licensed under MIT license.
