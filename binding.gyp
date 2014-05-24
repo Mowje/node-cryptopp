@@ -3,7 +3,7 @@
 		{
 			"target_name": "cryptopp",
 			"sources": ["node-cryptopp.cpp", "keyring.cc"],
-			"include_dirs": ["cryptopp/"],
+			"include_dirs": ["."],
 			"libraries": ["../cryptopp/libcryptopp.a"],
 			"cflags!": ["-fno-exceptions"],
 			"cflags_cc!": ["-fno-exceptions", "-fno-rtti"],
