@@ -4,7 +4,7 @@
 Node.js module that statically binds and simplifies the usage of the [Crypto++](http://cryptopp.com) comprehensive cryptography library.
 
 Bindings for:
-* [RSA](https://en.wikipedia.org/wiki/RSA_(algorithm\))
+* [RSA](https://en.wikipedia.org/wiki/RSA_%28algorithm%29)
 * [DSA](https://en.wikipedia.org/wiki/Digital_Signature_Algorithm) 
 * [ECIES](https://en.wikipedia.org/wiki/ECIES) 
 * [ECDH](https://en.wikipedia.org/wiki/ECDH)
@@ -34,7 +34,7 @@ Or, alternatively :
 npm install git+ssh://git@github.com:Tashweesh/node-cryptopp.git
 ```
 
-*NOTE*: This module used to be installable from npm. I struggled to make it work with 0.2.1. So I'm giving up on npm for now and gave you this alternate way to install cryptopp
+*NOTE*: This module used to be installable from npm. I struggled to make it work with 0.2.1. So I'm giving up on npm for now and gave you this alternate way to install cryptopp.
 
 ## CAUTION : minor API changes starting from v.0.2.0
 
@@ -71,7 +71,7 @@ var cryptopp = require('cryptopp');
 var keyRing = new cryptopp.KeyRing();
 ```
 
-Here are the list of methods exposed by the `KeyRing`
+Here are the list of methods exposed by the `KeyRing`:
 
 * `createKeyPair(algoType, algoOptions, [filename], [passphrase], [callback])`:  
 Generates a keypair the given algorithm. Returns the public key information object (as in the `publicKeyInfo()` method)
