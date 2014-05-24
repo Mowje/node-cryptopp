@@ -26,8 +26,9 @@ git-getcryptopp:
 	git submodule add https://github.com/Mowje/cryptopp.git
 	git submodule update
 
-build:
-	cp libMake cryptopp/GNUmakefile
+lib:
+	rm cryptopp/GNUmakefile
+	cp compileLib cryptopp/GNUmakefile
 	cd cryptopp; \
 	make
 	node-gyp rebuild

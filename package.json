@@ -5,7 +5,7 @@
   "main": "node-cryptopp.js",
   "scripts": {
     "test": "node test.js && node keyManagerTest.js",
-    "preinstall": "make git-getcryptopp && make build"
+    "preinstall": "make git-getcryptopp && make lib"
   },
   "repository": {
     "type": "git",
