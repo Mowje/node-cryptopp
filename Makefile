@@ -27,7 +27,7 @@ git-getcryptopp:
 	git submodule update
 
 build:
-	cp libMake cryptopp/GNUMakefile
+	cp libMake cryptopp/GNUmakefile
 	cd cryptopp; \
 	make
 	node-gyp rebuild
