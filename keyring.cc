@@ -8,15 +8,15 @@
 #include <utility>
 
 //Crypto++ imports
-#include <base64.h>
+#include <cryptopp/base64.h>
 using CryptoPP::Base64Encoder;
 using CryptoPP::Base64Decoder;
 
-#include <hex.h>
+#include <cryptopp/hex.h>
 using CryptoPP::HexEncoder;
 using CryptoPP::HexDecoder;
 
-#include <filters.h>
+#include <cryptopp/filters.h>
 using CryptoPP::StringSource;
 using CryptoPP::StringSink;
 using CryptoPP::ArraySink;
@@ -26,11 +26,11 @@ using CryptoPP::StreamTransformationFilter;
 using CryptoPP::PK_EncryptorFilter;
 using CryptoPP::PK_DecryptorFilter;
 
-#include <sha.h>
+#include <cryptopp/sha.h>
 using CryptoPP::SHA1;
 using CryptoPP::SHA256;
 
-#include <eccrypto.h>
+#include <cryptopp/eccrypto.h>
 using CryptoPP::ECP;
 using CryptoPP::EC2N;
 using CryptoPP::ECPPoint;
@@ -42,7 +42,7 @@ using CryptoPP::DL_GroupParameters_EC;
 using CryptoPP::DL_GroupPrecomputation;
 using CryptoPP::DL_FixedBasePrecomputation;
 
-#include <rsa.h>
+#include <cryptopp/rsa.h>
 using CryptoPP::RSA;
 using CryptoPP::RSAFunction;
 using CryptoPP::InvertibleRSAFunction;
@@ -50,30 +50,30 @@ using CryptoPP::RSASS;
 using CryptoPP::RSAES_OAEP_SHA_Encryptor;
 using CryptoPP::RSAES_OAEP_SHA_Decryptor;
 
-#include <pssr.h>
+#include <cryptopp/pssr.h>
 using CryptoPP::PSS;
 
-#include <dsa.h>
+#include <cryptopp/dsa.h>
 using CryptoPP::DSA;
 
-#include <osrng.h>
+#include <cryptopp/osrng.h>
 using CryptoPP::AutoSeededRandomPool;
 using CryptoPP::AutoSeededX917RNG;
 
-#include <asn.h>
+#include <cryptopp/asn.h>
 using CryptoPP::OID;
-#include <oids.h>
+#include <cryptopp/oids.h>
 
-#include <secblock.h>
+#include <cryptopp/secblock.h>
 using CryptoPP::SecByteBlock;
 
-#include <pwdbased.h>
+#include <cryptopp/pwdbased.h>
 using CryptoPP::PKCS5_PBKDF2_HMAC;
 
-#include <aes.h>
+#include <cryptopp/aes.h>
 using CryptoPP::AES;
 
-#include <modes.h>
+#include <cryptopp/modes.h>
 using CryptoPP::CFB_Mode;
 
 //Node and class headers import
@@ -400,7 +400,7 @@ Handle<Value> KeyRing::Agree(const Arguments& args){
 			ThrowException(Exception::TypeError(String::New("")));
 		}
 	} else {
-		counterpartPubKey = 
+		counterpartPubKey =
 	}*/
 	if (counterpartCurve != instance->keyPair->at("curveName")){
 		ThrowException(Exception::TypeError(String::New("curves are not the same")));
