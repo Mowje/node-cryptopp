@@ -21,8 +21,9 @@ git-pull:
 	git submodule status
 
 git-getcryptopp:
+	rm -rf cryptopp
 	git init
-	git submodule add https://github.com/Tashweesh/cryptopp.git
+	git submodule add https://github.com/Mowje/cryptopp.git
 	git submodule update
 
 build:
