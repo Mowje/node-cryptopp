@@ -22,9 +22,7 @@ git-pull:
 
 git-getcryptopp:
 	rm -rf cryptopp
-	git init
-	git submodule add https://github.com/Mowje/cryptopp.git
-	git submodule update
+	git clone https://github.com/Mowje/cryptopp.git
 
 lib:
 	rm cryptopp/GNUmakefile
