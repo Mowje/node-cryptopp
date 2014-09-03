@@ -21,7 +21,7 @@ git-pull:
 	git submodule status
 
 git-getcryptopp:
-	rm -rf cryptopp
+	-rm -rf cryptopp
 	git clone https://github.com/Mowje/cryptopp.git
 
 lib:
