@@ -1,5 +1,4 @@
 # node-cryptopp
-================
 
 Node.js module that statically binds and simplifies the usage of the [Crypto++](http://cryptopp.com) comprehensive cryptography library.
 
@@ -25,16 +24,16 @@ On installation, the node-cryptopp module compiles on your computer. Hence Crypt
 To install this module, run :
 
 ```shell
-npm install git+https://github.com/Tashweesh/node-cryptopp.git
+npm install git+https://github.com/Mowje/node-cryptopp.git
 ```
 
 Or, alternatively :
 
 ```shell
-npm install git+ssh://git@github.com:Tashweesh/node-cryptopp.git
+npm install git+ssh://git@github.com:Mowje/node-cryptopp.git
 ```
 
-*NOTE*: This module used to be installable from npm. I struggled to make it work with 0.2.1. So I'm giving up on npm for now and gave you this alternate way to install cryptopp.
+*NOTE*: This module used to be installable from npmjs.org. I struggled to make it work with 0.2.1. So I'm giving up on npm for now and gave you this alternate way to install cryptopp.
 
 ## CAUTION : minor API changes starting from v.0.2.0
 
@@ -234,7 +233,7 @@ Although there are already ways to encode/decode to hex/base64 in Node.js, I wro
 
 ## Keypair file format
 
-Here is how a keypair file is built. Note that every number is in written in big endian. Note that the format has changed slightly as of v0.2.2 to homogenize it [node-sodium](https://github.com/Tashweesh/node-sodium.git)'s format and to ease the integration of both modules into [node-hpka](https://github.com/Tashweesh/node-hpka.git). For reference, here is the [old key file format](https://github.com/Tashweesh/node-cryptopp/tree/master/OldKeyFileFormat.md).
+Here is how a keypair file is built. Note that every number is in written in big endian. Note that the format has changed slightly as of v0.2.2 to homogenize it [node-sodium](https://github.com/Mowje/node-sodium.git)'s format and to ease the integration of both modules into [node-hpka](https://github.com/Mowje/node-hpka.git). For reference, here is the [old key file format](https://github.com/Mowje/node-cryptopp/tree/master/OldKeyFileFormat.md).
 
 * algoType : a byte; 0x00 for ECDSA, 0x01 for RSA, 0x02 for DSA, 0x03 for ECDH, 0x04 for ECIES
 * if keyType is ECDSA or ECIES
