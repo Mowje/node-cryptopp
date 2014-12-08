@@ -513,7 +513,7 @@ Handle<Value> eciesDecryptP(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 3 || args.Length() == 4){
         //Casting the arguments
-        String::AsciiValue cipherTextVal(args[0]->ToString()), privateKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString()); 
+        String::AsciiValue cipherTextVal(args[0]->ToString()), privateKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
         std::string cipherText(*cipherTextVal), curveName(*curveNameVal), plainText;
         const CryptoPP::Integer privateKey = HexStrToInteger(*privateKeyVal);
         cipherText = strHexDecode(cipherText);
@@ -871,7 +871,7 @@ Handle<Value> ecdsaSignMessageB(const Arguments& args){
         }
     } else {
         ThrowException(v8::Exception::TypeError(String::New("Invalid number of parameters")));
-        return scope.Close(Undefined()); 
+        return scope.Close(Undefined());
     }
 }
 
@@ -915,7 +915,7 @@ Handle<Value> ecdsaVerifyMessageB(const Arguments& args){
         }
     } else {
         ThrowException(v8::Exception::TypeError(String::New("Invalid number of parameters")));
-        return scope.Close(Undefined()); 
+        return scope.Close(Undefined());
     }
 }
 

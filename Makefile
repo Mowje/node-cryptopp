@@ -9,8 +9,8 @@ define chdir
 endef
 
 clean:
-	rm -rf build
-	rm *.key
+	-rm -rf build
+	-rm *.key
 	cd cryptopp; \
 	make clean
 
@@ -26,7 +26,9 @@ git-getcryptopp:
 
 lib:
 	rm cryptopp/GNUmakefile
-	cp compileLib cryptopp/GNUmakefile
+	#cp compileLib cryptopp/GNUmakefile
+	node prepareBuild.js
 	cd cryptopp; \
-	make
+	make clean; \
+	make static
 	node-gyp rebuild
