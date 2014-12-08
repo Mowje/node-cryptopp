@@ -35,22 +35,28 @@ assert.equal(rsaTest, rsaDecrypted, 'The RSA decrypted message is invalid');
 //Testing RSA signature and verification
 var rsaSignTest = "testing RSA signature and verification";
 var rsaSignKeyPair = cryptopp.rsa.generateKeyPair(2048);
+var otherRsaSignKeyPair = cryptopp.rsa.generateKeyPair(2048);
 //console.log('\n### Testing RSA signature and verification ###\nTest message : ' + rsaSignTest + '\nModulus : ' + rsaSignKeyPair.modulus + '\nPublic exponent : ' + rsaSignKeyPair.publicExponent + '\nPrivate exponent : ' + rsaSignKeyPair.privateExponent);
 var rsaSignature = cryptopp.rsa.sign(rsaSignTest, rsaKeyPair.modulus, rsaKeyPair.privateExponent, rsaKeyPair.publicExponent);
 //console.log('Signature : ' + rsaSignature)
 var isRsaSignValid = cryptopp.rsa.verify(rsaSignTest, rsaSignature, rsaKeyPair.modulus, rsaKeyPair.publicExponent);
+var otherIsRsaSignValid = cryptopp.rsa.verify(rsaSignTest, rsaSignature, otherRsaSignKeyPair.modulus, otherRsaSignKeyPair.publicExponent);
 //console.log('Is signature valid : ' + isRsaSignValid);
 assert.equal(isRsaSignValid, true, 'The RSA signature is invalid');
+assert.equal(otherIsRsaSignValid, false, 'RSA signatures do not work!');
 
 // Testing DSA signature and verification
 var dsaTest = "testing DSA signature scheme";
 var dsaKeyPair = cryptopp.dsa.generateKeyPair(2048);
+var otherDsaKeyPair = cryptopp.dsa.generateKeyPair(2048);
 //console.log("\n### Testing DSA signature/verification ###\nTest message : " + dsaTest + "\nPrime Field : " + dsaKeyPair.primeField + "\nDivider : " + dsaKeyPair.divider + "\nBase : " + dsaKeyPair.base + "\nPrivate exponent : " + dsaKeyPair.privateExponent + "\nPublic element : " + dsaKeyPair.publicElement);
 var dsaSignature = cryptopp.dsa.sign(dsaTest, dsaKeyPair.primeField, dsaKeyPair.divider, dsaKeyPair.base, dsaKeyPair.privateExponent);
 //console.log("Signature : " + dsaSignature);
 var dsaIsValid = cryptopp.dsa.verify(dsaTest, dsaSignature, dsaKeyPair.primeField, dsaKeyPair.divider, dsaKeyPair.base, dsaKeyPair.publicElement);
+var otherDsaIsValid = cryptopp.dsa.verify(dsaTest, dsaSignature, otherDsaKeyPair.primeField, otherDsaKeyPair.divider, otherDsaKeyPair.base, otherDsaKeyPair.publicElement);
 //console.log("Is signature valid : " + dsaIsValid);
 assert.equal(dsaIsValid, true, 'The DSA signature is invalid');
+assert.equal(otherDsaIsValid, false, 'DSA signatures do not work!');
 
 // Testing ECIES encryption/decryption
 var eciesTest = "Testing ECIES encryption/decryption";
@@ -74,12 +80,15 @@ assert.equal(eciesTest, eciesDecrypted, 'The decrypted ECIES message is invalid 
 //Testing ECDSA signing and verification on prime fields
 var ecdsaTest = "testing ECDSA signing and verification";
 var ecdsaKeyPair = cryptopp.ecdsa.prime.generateKeyPair("secp256r1");
+var otherEcdsaKeyPair = cryptopp.ecdsa.prime.generateKeyPair('secp256r1');
 //console.log("\n### Testing ECDSA signing and verification on prime fields ###\nTest message : " + ecdsaTest + "\nCurve name : " + ecdsaKeyPair.curveName + "\nPrivate key : " + ecdsaKeyPair.privateKey + "\nPublic key :\n\tx : " + ecdsaKeyPair.publicKey.x + "\n\ty : " + ecdsaKeyPair.publicKey.y);
 var ecdsaSignature = cryptopp.ecdsa.prime.sign(ecdsaTest, ecdsaKeyPair.privateKey, "secp256r1");
 //console.log("Signature : " + ecdsaSignature);
 var ecdsaIsValid = cryptopp.ecdsa.prime.verify(ecdsaTest, ecdsaSignature, ecdsaKeyPair.publicKey, "secp256r1");
+var ecdsaIsNotValid = cryptopp.ecdsa.prime.verify(ecdsaTest, ecdsaSignature, otherEcdsaKeyPair.publicKey, 'secp256r1');
 //console.log("Is valid : " + ecdsaIsValid);
 assert.equal(ecdsaIsValid, true, 'The ECDSA signature is invalid (prime fields)');
+assert.equal(ecdsaIsNotValid, false, 'ECDSA signatures verification does not work!!!');
 
 //Testing ECDSA signing and verification on binary fields
 /*ecdsaKeyPair = cryptopp.ecdsa.binary.generateKeyPair('sect283r1');
