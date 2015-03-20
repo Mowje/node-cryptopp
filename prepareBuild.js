@@ -14,10 +14,10 @@ if (!isNaN(kernelMajorVersion) && kernelMajorVersion >= 13 && platform == 'darwi
 
 if (isOSXMavericksOrSuperior){
 	console.log('OSX mavericks');
-	fs.writeFileSync('binding.gyp', fs.readFileSync('osx13-binding.gyp'));
-	fs.writeFileSync('cryptopp/GNUmakefile', fs.readFileSync('compileLibOSX13'));
+	fs.writeFileSync(path.join(__dirname, 'binding.gyp'), fs.readFileSync(path.join(__dirname, 'osx13-binding.gyp')));
+	fs.writeFileSync(path.join(__dirname, 'cryptopp/GNUmakefile'), fs.readFileSync(path.join(__dirname, 'compileLibOSX13')));
 } else {
 	console.log('Standard binding and compilation process');
-	fs.writeFileSync('binding.gyp', fs.readFileSync('std-binding.gyp'));
-	fs.writeFileSync('cryptopp/GNUmakefile', fs.readFileSync('compileLib'));
+	fs.writeFileSync(path.join(__dirname, 'binding.gyp'), fs.readFileSync(path.join(__dirname, 'std-binding.gyp')));
+	fs.writeFileSync(path.join(__dirname, 'cryptopp/GNUmakefile'), fs.readFileSync(path.join(__dirname, 'compileLib')));
 }
