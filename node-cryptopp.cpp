@@ -741,7 +741,6 @@ Handle<Value> ecdsaVerifyMessageP(const Arguments& args){
                 }
             }
         }
-        Local<Value> result = Local<Value>::New(Undefined());
         //Checking the existence of the curve
         if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))){
             ThrowException(v8::Exception::TypeError(String::New("Invalid public key object")));
@@ -770,15 +769,14 @@ Handle<Value> ecdsaVerifyMessageP(const Arguments& args){
             signature = strHexDecode(signature);
             StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<ECP, SHA256>::Verifier(publicKey), new ArraySink( (byte*)&valid, sizeof(valid) )));
         }
-        result = BooleanObject::New(valid);
         //Returning the result
         if (args.Length() < 6){
-            return scope.Close(result);
+            return scope.Close(Boolean::New(valid));
         } else {
-            if (args[5]->IsUndefined()) return scope.Close(result);
+            if (args[5]->IsUndefined()) return scope.Close(Boolean::New(valid));
             Local<Function> callback = Local<Function>::Cast(args[5]);
             const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
+            Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(valid)) };
             callback->Call(Context::GetCurrent()->Global(), argc, argv);
             return scope.Close(Undefined());
         }
@@ -884,7 +882,6 @@ Handle<Value> ecdsaVerifyMessageB(const Arguments& args){
         String::AsciiValue signatureVal(args[1]->ToString()), curveNameVal(args[3]->ToString());
         std::string message(*messageVal), signature(*signatureVal), curveName(*curveNameVal);
         bool isValid = false;
-        Local<Value> result = Local<Value>::New(Undefined());
         Local<Object> publicKeyObj = Local<Object>::Cast(args[2]);
         //Checking curve existence and loading it. Checking attributes of public key object
         if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))){
@@ -902,14 +899,13 @@ Handle<Value> ecdsaVerifyMessageB(const Arguments& args){
         publicKey.Initialize(curve, publicElement);
         signature = strHexDecode(signature);
         StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<EC2N, SHA256>::Verifier(publicKey), new ArraySink( (byte*) &isValid, sizeof(isValid) )));
-        result = BooleanObject::New(isValid);
         //Return the result
         if (args.Length() == 4){
-            return scope.Close(result);
+            return scope.Close(Boolean::New(isValid));
         } else {
             Local<Function> callback = Local<Function>::Cast(args[4]);
             const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
+            Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(isValid)) };
             callback->Call(Context::GetCurrent()->Global(), argc, argv);
             return scope.Close(Undefined());
         }
@@ -1244,7 +1240,6 @@ Handle<Value> rsaVerify(const Arguments& args){
                 }
             }
         }
-        Local<Value> result = Local<Value>::New(Undefined());
         //Verifying the signature
         RSAFunction publicParams;
         bool isValid = false;
@@ -1257,15 +1252,14 @@ Handle<Value> rsaVerify(const Arguments& args){
             RSASS<PSS, SHA256>::Verifier verifier(publicKey);
             StringSource(signature+message, true, new SignatureVerificationFilter(verifier, new ArraySink( (byte*)&isValid, sizeof(isValid) )));
         }
-        result = BooleanObject::New(isValid);
         //Returning the result
         if (args.Length() < 6){
-            return scope.Close(result);
+            return scope.Close(Boolean::New(isValid));
         } else {
-            if (args[5]->IsUndefined()) return scope.Close(Undefined());
+            if (args[5]->IsUndefined()) return scope.Close(Boolean::New(isValid));
             Local<Function> callback = Local<Function>::Cast(args[5]);
             const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
+            Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(isValid)) };
             callback->Call(Context::GetCurrent()->Global(), argc, argv);
             return scope.Close(Undefined());
         }
@@ -1368,13 +1362,12 @@ Handle<Value> dsaVerify(const Arguments& args){
 
         signature = strHexDecode(signature);
         StringSource(signature+message, true, new SignatureVerificationFilter(DSA::Verifier(publicKey), new ArraySink( (byte*)&isValid, sizeof(isValid) )));
-        result = BooleanObject::New(isValid);
         if (args.Length() == 6){
-            return scope.Close(result);
+            return scope.Close(Boolean::New(isValid));
         } else {
             Local<Function> callback = Local<Function>::Cast(args[6]);
             const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
+            Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(isValid)) };
             callback->Call(Context::GetCurrent()->Global(), argc, argv);
             return scope.Close(Undefined());
         }

@@ -1,5 +1,6 @@
 //console.log('CRYPTOPP TEST AND EXAMPLE SCRIPT');
 var cryptopp = require('./node-cryptopp.js');
+var crypto = require('crypto');
 var assert = require('assert');
 // NOTE : when you have installed node-cryptopp, use require('cryptopp') instead
 
@@ -41,9 +42,11 @@ var rsaSignature = cryptopp.rsa.sign(rsaSignTest, rsaKeyPair.modulus, rsaKeyPair
 //console.log('Signature : ' + rsaSignature)
 var isRsaSignValid = cryptopp.rsa.verify(rsaSignTest, rsaSignature, rsaKeyPair.modulus, rsaKeyPair.publicExponent);
 var otherIsRsaSignValid = cryptopp.rsa.verify(rsaSignTest, rsaSignature, otherRsaSignKeyPair.modulus, otherRsaSignKeyPair.publicExponent);
+var fuzzingRsaValid = cryptopp.rsa.verify(rsaSignTest, crypto.randomBytes(2048/8).toString('hex'), rsaKeyPair.modulus, otherRsaSignKeyPair.publicExponent);
 //console.log('Is signature valid : ' + isRsaSignValid);
-assert.equal(isRsaSignValid, true, 'The RSA signature is invalid');
-assert.equal(otherIsRsaSignValid, false, 'RSA signatures do not work!');
+assert.deepEqual(isRsaSignValid, true, 'The RSA signature is invalid');
+assert.deepEqual(otherIsRsaSignValid, false, 'RSA signatures do not work!');
+assert.deepEqual(fuzzingRsaValid, false, 'RSA signatures can spoofed with fuzzing!');
 
 // Testing DSA signature and verification
 var dsaTest = "testing DSA signature scheme";
@@ -54,9 +57,11 @@ var dsaSignature = cryptopp.dsa.sign(dsaTest, dsaKeyPair.primeField, dsaKeyPair.
 //console.log("Signature : " + dsaSignature);
 var dsaIsValid = cryptopp.dsa.verify(dsaTest, dsaSignature, dsaKeyPair.primeField, dsaKeyPair.divider, dsaKeyPair.base, dsaKeyPair.publicElement);
 var otherDsaIsValid = cryptopp.dsa.verify(dsaTest, dsaSignature, otherDsaKeyPair.primeField, otherDsaKeyPair.divider, otherDsaKeyPair.base, otherDsaKeyPair.publicElement);
+var fuzzingDsaValid = cryptopp.dsa.verify(dsaTest, crypto.randomBytes(2048/8).toString('hex'), dsaKeyPair.primeField, dsaKeyPair.divider, dsaKeyPair.base, dsaKeyPair.publicElement);
 //console.log("Is signature valid : " + dsaIsValid);
-assert.equal(dsaIsValid, true, 'The DSA signature is invalid');
-assert.equal(otherDsaIsValid, false, 'DSA signatures do not work!');
+assert.deepEqual(dsaIsValid, true, 'The DSA signature is invalid');
+assert.deepEqual(otherDsaIsValid, false, 'DSA signatures do not work!');
+assert.deepEqual(fuzzingDsaValid, false, 'DSA signatures can be spoofed with fuzzing!');
 
 // Testing ECIES encryption/decryption
 var eciesTest = "Testing ECIES encryption/decryption";
@@ -86,9 +91,11 @@ var ecdsaSignature = cryptopp.ecdsa.prime.sign(ecdsaTest, ecdsaKeyPair.privateKe
 //console.log("Signature : " + ecdsaSignature);
 var ecdsaIsValid = cryptopp.ecdsa.prime.verify(ecdsaTest, ecdsaSignature, ecdsaKeyPair.publicKey, "secp256r1");
 var ecdsaIsNotValid = cryptopp.ecdsa.prime.verify(ecdsaTest, ecdsaSignature, otherEcdsaKeyPair.publicKey, 'secp256r1');
+var fuzzingEcdsaValid = cryptopp.ecdsa.prime.verify(ecdsaTest, crypto.randomBytes(32).toString('hex'), ecdsaKeyPair.publicKey, "secp256r1");
 //console.log("Is valid : " + ecdsaIsValid);
-assert.equal(ecdsaIsValid, true, 'The ECDSA signature is invalid (prime fields)');
-assert.equal(ecdsaIsNotValid, false, 'ECDSA signatures verification does not work!!!');
+assert.deepEqual(ecdsaIsValid, true, 'The ECDSA signature is invalid (prime fields)');
+assert.deepEqual(ecdsaIsNotValid, false, 'ECDSA signatures verification does not work!!!');
+assert.deepEqual(fuzzingEcdsaValid, false, 'ECDSA signatures can be spoofed with fuzzing!');
 
 //Testing ECDSA signing and verification on binary fields
 /*ecdsaKeyPair = cryptopp.ecdsa.binary.generateKeyPair('sect283r1');
