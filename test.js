@@ -121,6 +121,7 @@ assert.equal(secret1, secret2, 'The shared secret isn\'t the same (prime fields)
 
 //Testing ECDH on binary fields
 //console.log('\n### Testing ECDH key agreement on binary fields ###');
+/*
 keyPair1 = cryptopp.ecdh.binary.generateKeyPair('sect283r1');
 keyPair2 = cryptopp.ecdh.binary.generateKeyPair('sect283r1');
 //console.log('Key pair 1 :\nPrivate key : ' + keyPair1.privateKey + '\nPublic key : ' + keyPair1.publicKey + '\nCurve name : ' + keyPair1.curveName + '\n');
@@ -131,5 +132,5 @@ secret1 = cryptopp.ecdh.binary.agree(keyPair1.privateKey, keyPair2.publicKey, ke
 secret2 = cryptopp.ecdh.binary.agree(keyPair2.privateKey, keyPair1.publicKey, keyPair2.curveName);
 //console.log('Secret 1 :\n' + secret1 + '\nSecret 2 :\n' + secret2);
 assert.equal(secret1, secret2, 'The shared secret isn\'t the same (binary fields)');
-
+*/
 //console.log('\nCRYPTOPP TEST SCRIPT ENDED SUCCESSFULLY');

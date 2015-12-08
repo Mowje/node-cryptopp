@@ -4,8 +4,8 @@ Node.js module that statically binds and simplifies the usage of the [Crypto++](
 
 Bindings for:
 * [RSA](https://en.wikipedia.org/wiki/RSA_%28algorithm%29)
-* [DSA](https://en.wikipedia.org/wiki/Digital_Signature_Algorithm) 
-* [ECIES](https://en.wikipedia.org/wiki/ECIES) 
+* [DSA](https://en.wikipedia.org/wiki/Digital_Signature_Algorithm)
+* [ECIES](https://en.wikipedia.org/wiki/ECIES)
 * [ECDH](https://en.wikipedia.org/wiki/ECDH)
 * [ECDSA](https://en.wikipedia.org/wiki/ECDSA)
 * Base64 and hexadecimal encoding
@@ -52,8 +52,9 @@ Note that I wanted to allow key encryption (ie, when saving then on disk). But i
 * By default, each method described could be given a callback. If no callback is given, the method's result is returned.
 * If you want to skip an optional parameter but want to define the parameter that follows it, then the skipped parameter **MUST** be set to `undefined`. Sorry if this seems to totally inconvenient
 * This library isn't well written in terms of error management (except the KeyRing class). If the app crashes or throws some strange exception, it is probably because you did something wrong (Thanks Captain Obvious) but in general it won't tell you what it is. Note that if you use a method with a callback, the errors will be thrown exactly like when you use the method without a callback
-* The different ECC algorithms for which are (or will be) implemented here use standard elliptic curves, defined [here](http://www.secg.org/collateral/sec2_final.pdf). The related methods will have a "curveName" parameter, taken from the previously linked document, like "secp256r1" or "sect233k1". Beware, it is case-sensible. Each communicating side must use the same curve.
+* The different ECC algorithms for which are (or will be) implemented here use standard elliptic curves, defined [here](http://www.secg.org/collateral/sec2_final.pdf). The related methods will have a "curveName" parameter, taken from the previously linked document, like "secp256r1" or "sect233k1". Beware, it is case-sensitive. Each party must use the same curve.
 * ECIES keypairs can be used in ECDSA and vice-versa! (as long as you use the same curve in both algorithms) [paper that proves it; look for section 4](http://eprint.iacr.org/2011/615)
+* You should not use ECDH or ECDSA on binary fields! There is a bug in the related methods that is not yet fixed. (probably in hexStr<->PolynomialMod2 versions, if you are more courageous than me and want to dig in)
 * You can choose what hash function want to use in ECDSA and RSA signatures. You can choose either SHA1 (default) or SHA256. Just set the `hashName` parameter to 'sha1' or 'sha256' in the corresponding methods. Note that the default hash function for these algorthims in version prior to v0.2.0 was SHA256.
 * Keys, ciphertexts and signatures are all hex encoded. These data types should be kept "as-is" when passed to other methods.
 
@@ -63,7 +64,7 @@ The test.js script gives example usages for most implemented algorithms. So you 
 
 ### KeyRing
 
-Before using the `KeyRing`, you must construct it. This is how it's done : 
+Before using the `KeyRing`, you must construct it. This is how it's done :
 
 ```js
 var cryptopp = require('cryptopp');
@@ -180,7 +181,9 @@ To use ECIES on binary fields, just replace in the code above "prime" by "binary
 
 ### ECDSA
 
-Bindings have been written for ECDSA for prime and prime fields. However, there is a bug somewhere in the binary field version in the signing method (probably in hexStr<->PolynomialMod2 conversions, a bug I don't want to fix for now...). You can choose which hashing function you want to use by setting the `hashName` parameter either to "sha1" or "sha256" (other values will throw an exception). The ECDSA methods are reachable in a manner similar to ECIES. Here are ECDSA's methods :
+Bindings have been written for ECDSA for prime and prime fields. However, as mentioned before in the "General notes" there is a bug somewhere in the binary field version in the signing method.
+
+You can choose which hashing function you want to use by setting the `hashName` parameter either to "sha1" or "sha256" (other values will throw an exception). The ECDSA methods are reachable in a manner similar to ECIES. Here are ECDSA's methods :
 
 * __ecdsa.[fieldType].generateKeyPair(curveName, [callback(keyPair)])__ : Returns an object containing the private key, the public key and the curve name.
 * __ecdsa.[fieldType].sign(message, privateKey, curveName, [hashName], [callback(signature)])__ : Returns the signature for the given message
@@ -197,7 +200,7 @@ var isValid = cryptopp.ecdsa.prime.verify(message, signature, keyPair.publicKey,
 
 ### ECDH
 
-Binding have been written for ECDH for both type of fields. However, the ECDH version don't always give the same secret in the "agree" method. So don't use it... There is probably a bug somewhere in hexStr<->PolynomialMod2 conversion methods, but I don't want to fix it for now.
+Binding have been written for ECDH for both type of fields. However, the binary version don't always give the same secret in the "agree" method.
 
 There are only 2 methods per field :
 
@@ -309,4 +312,4 @@ Here is how a keypair file is built. Note that every number is in written in big
 
 ## License
 
-This module is licensed under MIT license.
+This module is licensed under the MIT license.
