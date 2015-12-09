@@ -1,0 +1,9 @@
+before_script:
+  - "make git-pull"
+
+stages:
+  - test
+
+check:
+  - script: "make test"
+  - stage: test

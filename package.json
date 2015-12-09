@@ -4,8 +4,8 @@
   "description": "Node.js static bindings for the Crypto++ library",
   "main": "node-cryptopp.js",
   "scripts": {
-    "test": "node test.js && node keyManagerTest.js",
-    "preinstall": "make git-getcryptopp && make lib"
+    "test": "make test",
+    "preinstall": "make cryptopp && make build"
   },
   "repository": {
     "type": "git",

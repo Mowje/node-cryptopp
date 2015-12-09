@@ -1,16 +1,8 @@
-SHELL := /bin/bash
-TEST = test/*.js
-REPORTER = dot
-
-CHDIR_SHELL := $(SHELL)
-define chdir
-	$(eval _D=$(firstword $(1) $(@D)))
-	$(info $(MAKE): cd $(_D) $(eval SHELL = cd $(_D); $(CHDIR_SHELL))
-endef
-
 clean:
 	-rm -rf build
 	-rm *.key
+
+clean-all: clean
 	cd cryptopp; \
 	make clean
 
@@ -20,13 +12,21 @@ git-pull:
 	git submodule update
 	git submodule status
 
-git-getcryptopp:
+cryptopp:
 	-rm -rf cryptopp
 	git clone https://github.com/Mowje/cryptopp.git
 
-lib:
+build: cryptopp
 	-rm cryptopp/GNUmakefile
 	#cp compileLib cryptopp/GNUmakefile
 	node prepareBuild.js
 	cd cryptopp && make clean && make static
 	node-gyp rebuild
+
+rebuild: clean build
+
+test: build
+	cd cryptopp && make test
+	node test.js
+	node keyManagerTest.js
+	node asyncTest.js
