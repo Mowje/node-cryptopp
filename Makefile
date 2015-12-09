@@ -19,6 +19,7 @@ cryptopp:
 build: cryptopp
 	-rm cryptopp/GNUmakefile
 	#cp compileLib cryptopp/GNUmakefile
+	ls
 	node prepareBuild.js
 	cd cryptopp && make clean && make static
 	node-gyp rebuild
