@@ -24,7 +24,6 @@
   ],
   "author": "Batikh Souri",
   "license": "MIT",
-  "gypfile": true,
   "bugs": {
     "url": "https://github.com/Mowje/node-cryptopp/issues"
   }
