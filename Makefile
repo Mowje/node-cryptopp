@@ -17,7 +17,7 @@ cryptopp:
 	git clone https://github.com/Mowje/cryptopp.git
 
 build: cryptopp
-	-rm cryptopp/GNUmakefile
+	#-rm cryptopp/GNUmakefile
 	#cp compileLib cryptopp/GNUmakefile
 	#node prepareBuild.js
 	cd cryptopp && make clean && make static
