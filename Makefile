@@ -11,6 +11,7 @@ git-pull:
 	git submodule init
 	git submodule update
 	git submodule status
+	cd cryptopp && git pull origin master
 
 cryptopp:
 	-rm -rf cryptopp
