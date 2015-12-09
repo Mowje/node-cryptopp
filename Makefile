@@ -29,4 +29,3 @@ test: build
 	cd cryptopp && make test
 	node test.js
 	node keyManagerTest.js
-	node asyncTest.js
