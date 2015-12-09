@@ -13,11 +13,10 @@ git-pull:
 	git submodule status
 	cd cryptopp && git pull origin master
 
-cryptopp:
-	-rm -rf cryptopp
+cryptopp/GNUmakefile:
 	git clone https://github.com/Mowje/cryptopp.git
 
-build: cryptopp
+build: cryptopp/GNUmakefile
 	cd cryptopp && make
 	node-gyp rebuild
 
