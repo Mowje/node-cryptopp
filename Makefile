@@ -17,7 +17,7 @@ cryptopp:
 	git clone https://github.com/Mowje/cryptopp.git
 
 build: cryptopp
-	cd cryptopp && make clean && make static
+	cd cryptopp && make distclean && make static
 	node-gyp rebuild
 
 rebuild: clean build
