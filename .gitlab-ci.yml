@@ -5,5 +5,5 @@ stages:
   - test
 
 check:
-  - script: "make test"
-  - stage: test
+  script: "make test"
+  stage: test
