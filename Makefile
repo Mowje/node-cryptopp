@@ -7,7 +7,7 @@ clean-all: clean
 	make clean
 
 git-pull:
-	git pull
+	-git pull
 	git submodule init
 	git submodule update
 	git submodule status
