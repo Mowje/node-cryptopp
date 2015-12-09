@@ -21,7 +21,7 @@ All the crypto methods could be used in sync/async mode
 
 On installation, the node-cryptopp module compiles on your computer. Hence Crypto++ needs to be installed.
 
-To install this module, run :
+To install the latest version of this module, run :
 
 ```shell
 npm install git+https://github.com/Mowje/node-cryptopp.git
@@ -32,6 +32,8 @@ Or, alternatively :
 ```shell
 npm install git+ssh://git@github.com:Mowje/node-cryptopp.git
 ```
+
+If you want to use a specific version of this module (let's say v0.2.4), you should add a "#" character and the version number at the end of the URL given. (In our example, that makes : `npm install git+https://github.com/Mowje/node-cryptopp.git#v0.2.4`)
 
 *NOTE*: This module used to be installable from npmjs.org. I struggled to make it work with 0.2.1. So I'm giving up on npm for now and gave you this alternate way to install cryptopp.
 
