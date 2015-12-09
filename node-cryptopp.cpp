@@ -247,20 +247,30 @@ Handle<Value> hexDecode(const Arguments& args){
 */
 Handle<Value> base64Encode(const Arguments& args){
     HandleScope scope;
-    String::Utf8Value strVal(args[0]->ToString());
-    std::string content(*strVal);
-    std::string encodedContent;
-    StringSource(content, true, new Base64Encoder(new StringSink(encodedContent), false)); // "False" parameter prevents inserting line breaks
-    return scope.Close(String::New(encodedContent.c_str()));
+    try {
+        String::Utf8Value strVal(args[0]->ToString());
+        std::string content(*strVal);
+        std::string encodedContent;
+        StringSource(content, true, new Base64Encoder(new StringSink(encodedContent), false)); // "False" parameter prevents inserting line breaks
+        return scope.Close(String::New(encodedContent.c_str()));
+    } catch (CryptoPP::Exception& e){
+        ThrowException(v8::Exception::Error(String::New(e.what())));
+        return scope.Close(Undefined());
+    }
 }
 
 Handle<Value> base64Decode(const Arguments& args){
     HandleScope scope;
-    String::Utf8Value strVal(args[0]->ToString());
-    std::string encodedContent(*strVal);
-    std::string content;
-    StringSource(encodedContent, true, new Base64Decoder(new StringSink(content)));
-    return scope.Close(String::New(content.c_str()));
+    try {
+        String::Utf8Value strVal(args[0]->ToString());
+        std::string encodedContent(*strVal);
+        std::string content;
+        StringSource(encodedContent, true, new Base64Decoder(new StringSink(content)));
+        return scope.Close(String::New(content.c_str()));
+    } catch (CryptoPP::Exception& e){
+        ThrowException(v8::Exception::Error(String::New(e.what())));
+        return scope.Close(Undefined());
+    }
 }
 
 /*
@@ -270,28 +280,34 @@ Handle<Value> base64Decode(const Arguments& args){
 Handle<Value> randomBytes(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
-        std::string encoding = "hex";
-        if (args.Length() == 2){
-            String::AsciiValue encodingVal(args[1]->ToString());
-            std::string encodingInput(*encodingVal);
-            if (encodingInput == "hex" || encodingInput == "base64"){
-                encoding = encodingInput;
-            } else {
-                ThrowException(v8::Exception::TypeError(String::New("When used, the \"encoding\" parameters must either be \"hex\" for hexadecimal or \"base64\" for Base64 encoding")));
+        try {
+            std::string encoding = "hex";
+            if (args.Length() == 2){
+                String::AsciiValue encodingVal(args[1]->ToString());
+                std::string encodingInput(*encodingVal);
+                if (encodingInput == "hex" || encodingInput == "base64"){
+                    encoding = encodingInput;
+                } else {
+                    ThrowException(v8::Exception::TypeError(String::New("When used, the \"encoding\" parameters must either be \"hex\" for hexadecimal or \"base64\" for Base64 encoding")));
+                    return scope.Close(Undefined());
+                }
             }
+            Local<v8::Integer> numBytesVal = Local<v8::Integer>::Cast(args[0]);
+            unsigned int numBytes = numBytesVal->Value();
+            byte randomBytes[numBytes];
+            AutoSeededRandomPool prng;
+            prng.GenerateBlock(randomBytes, sizeof(randomBytes));
+            std::string randomString = "";
+            if (encoding == "hex"){
+                randomString = bufferHexEncode(randomBytes, sizeof(randomBytes));
+            } else {
+                randomString = bufferBase64Encode(randomBytes, sizeof(randomBytes));
+            }
+            return scope.Close(String::New(randomString.c_str()));
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
+            return scope.Close(Undefined());
         }
-        Local<v8::Integer> numBytesVal = Local<v8::Integer>::Cast(args[0]);
-        unsigned int numBytes = numBytesVal->Value();
-        byte randomBytes[numBytes];
-        AutoSeededRandomPool prng;
-        prng.GenerateBlock(randomBytes, sizeof(randomBytes));
-        std::string randomString = "";
-        if (encoding == "hex"){
-            randomString = bufferHexEncode(randomBytes, sizeof(randomBytes));
-        } else {
-            randomString = bufferBase64Encode(randomBytes, sizeof(randomBytes));
-        }
-        return scope.Close(String::New(randomString.c_str()));
     } else {
         ThrowException(v8::Exception::TypeError(String::New("Invalid number of parameters. generateBytes methods takes only the number of bytes to be generated.")));
         return scope.Close(Undefined());
@@ -380,33 +396,38 @@ OID getBCurveFromName(std::string curveName){
 Handle<Value> eciesGenerateKeyPairP(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
-        String::Utf8Value curveVal(args[0]->ToString());
-        std::string curveName(*curveVal);
-        Local<Value> result = Local<Value>::New(Undefined());
-        OID curve = getPCurveFromName(curveName);
-        //Initializing decryptor
-        AutoSeededRandomPool prng;
-        ECIES<ECP>::Decryptor d(prng, curve);
-        CryptoPP::Integer privateKey = d.GetKey().GetPrivateExponent();
-        const DL_GroupParameters_EC<ECP>& params = d.GetKey().GetGroupParameters();
-        const DL_FixedBasePrecomputation<ECPPoint>& bpc = params.GetBasePrecomputation();
-        const ECPPoint publicKey = bpc.Exponentiate(params.GetGroupPrecomputation(), d.GetKey().GetPrivateExponent());
-        Local<Object> keyPair = Object::New();
-        keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
-        keyPair->Set(String::NewSymbol("privateKey"), String::New(IntegerToHexStr(privateKey).c_str()));
-        Local<Object> publicKeyObj = Object::New();
-        publicKeyObj->Set(String::NewSymbol("x"), String::New(IntegerToHexStr(publicKey.x).c_str()));
-        publicKeyObj->Set(String::NewSymbol("y"), String::New(IntegerToHexStr(publicKey.y).c_str()));
-        keyPair->Set(String::NewSymbol("publicKey"), publicKeyObj);
-        result = keyPair;
-        //Returning the result
-        if (args.Length() == 1){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[1]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            String::Utf8Value curveVal(args[0]->ToString());
+            std::string curveName(*curveVal);
+            Local<Value> result = Local<Value>::New(Undefined());
+            OID curve = getPCurveFromName(curveName);
+            //Initializing decryptor
+            AutoSeededRandomPool prng;
+            ECIES<ECP>::Decryptor d(prng, curve);
+            CryptoPP::Integer privateKey = d.GetKey().GetPrivateExponent();
+            const DL_GroupParameters_EC<ECP>& params = d.GetKey().GetGroupParameters();
+            const DL_FixedBasePrecomputation<ECPPoint>& bpc = params.GetBasePrecomputation();
+            const ECPPoint publicKey = bpc.Exponentiate(params.GetGroupPrecomputation(), d.GetKey().GetPrivateExponent());
+            Local<Object> keyPair = Object::New();
+            keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
+            keyPair->Set(String::NewSymbol("privateKey"), String::New(IntegerToHexStr(privateKey).c_str()));
+            Local<Object> publicKeyObj = Object::New();
+            publicKeyObj->Set(String::NewSymbol("x"), String::New(IntegerToHexStr(publicKey.x).c_str()));
+            publicKeyObj->Set(String::NewSymbol("y"), String::New(IntegerToHexStr(publicKey.y).c_str()));
+            keyPair->Set(String::NewSymbol("publicKey"), publicKeyObj);
+            result = keyPair;
+            //Returning the result
+            if (args.Length() == 1){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[1]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -430,33 +451,38 @@ Handle<Value> eciesGenerateKeyPairP(const Arguments& args){
 Handle<Value> eciesGenerateKeyPairB(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
-        String::Utf8Value curveVal(args[0]->ToString());
-        std::string curveName(*curveVal);
-        Local<Value> result = Local<Value>::New(Undefined());
-        OID curve = getBCurveFromName(curveName);
-        //Initializing decryptor
-        AutoSeededRandomPool prng;
-        ECIES<EC2N>::Decryptor d(prng, curve);
-        CryptoPP::Integer privateKey = d.GetKey().GetPrivateExponent();
-        const DL_GroupParameters_EC<EC2N>& params = d.GetKey().GetGroupParameters();
-        const DL_FixedBasePrecomputation<EC2NPoint>& bpc = params.GetBasePrecomputation();
-        const EC2NPoint publicKey = bpc.Exponentiate(params.GetGroupPrecomputation(), d.GetKey().GetPrivateExponent());
-        Local<Object> keyPair = Object::New();
-        keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
-        keyPair->Set(String::NewSymbol("privateKey"), String::New(IntegerToHexStr(privateKey).c_str()));
-        Local<Object> publicKeyObj = Object::New();
-        publicKeyObj->Set(String::NewSymbol("x"), String::New(PolynomialMod2ToHexStr(publicKey.x).c_str()));
-        publicKeyObj->Set(String::NewSymbol("y"), String::New(PolynomialMod2ToHexStr(publicKey.y).c_str()));
-        keyPair->Set(String::NewSymbol("publicKey"), publicKeyObj);
-        result = keyPair;
-        //Returning the result
-        if (args.Length() == 1){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[1]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            String::Utf8Value curveVal(args[0]->ToString());
+            std::string curveName(*curveVal);
+            Local<Value> result = Local<Value>::New(Undefined());
+            OID curve = getBCurveFromName(curveName);
+            //Initializing decryptor
+            AutoSeededRandomPool prng;
+            ECIES<EC2N>::Decryptor d(prng, curve);
+            CryptoPP::Integer privateKey = d.GetKey().GetPrivateExponent();
+            const DL_GroupParameters_EC<EC2N>& params = d.GetKey().GetGroupParameters();
+            const DL_FixedBasePrecomputation<EC2NPoint>& bpc = params.GetBasePrecomputation();
+            const EC2NPoint publicKey = bpc.Exponentiate(params.GetGroupPrecomputation(), d.GetKey().GetPrivateExponent());
+            Local<Object> keyPair = Object::New();
+            keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
+            keyPair->Set(String::NewSymbol("privateKey"), String::New(IntegerToHexStr(privateKey).c_str()));
+            Local<Object> publicKeyObj = Object::New();
+            publicKeyObj->Set(String::NewSymbol("x"), String::New(PolynomialMod2ToHexStr(publicKey.x).c_str()));
+            publicKeyObj->Set(String::NewSymbol("y"), String::New(PolynomialMod2ToHexStr(publicKey.y).c_str()));
+            keyPair->Set(String::NewSymbol("publicKey"), publicKeyObj);
+            result = keyPair;
+            //Returning the result
+            if (args.Length() == 1){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[1]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -469,37 +495,42 @@ Handle<Value> eciesGenerateKeyPairB(const Arguments& args){
 Handle<Value> eciesEncryptP(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 3 || args.Length() == 4){
-        //Casting arguments
-        String::Utf8Value plainTextVal(args[0]->ToString());
-        String::AsciiValue curveNameVal(args[2]->ToString());
-        std::string plainText(*plainTextVal), curveName(*curveNameVal), cipherText;
-        Local<Object> publicKeyObj = Local<Object>::Cast(args[1]);
-        Local<Value> result = Local<Value>::New(Undefined());
-        OID curve = getPCurveFromName(curveName);
-        //Casting the public key and encrypting the plaintext
-        if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))) {
-            ThrowException(v8::Exception::TypeError(String::New("Invalid public key object")));
-            return scope.Close(Local<Value>::New(Undefined()));
-        }
-        AutoSeededRandomPool prng;
-        ECIES<ECP>::Encryptor e;
-        Local<String> xVal, yVal;
-        xVal = Local<String>::Cast(publicKeyObj->Get(String::New("x")));
-        yVal = Local<String>::Cast(publicKeyObj->Get(String::New("y")));
-        const ECPPoint publicKey(HexStrToInteger(*(String::AsciiValue(xVal))), HexStrToInteger(*(String::AsciiValue(yVal))));
-        e.AccessKey().AccessGroupParameters().Initialize(curve);
-        e.AccessKey().SetPublicElement(publicKey);
-        StringSource(plainText, true, new PK_EncryptorFilter(prng, e, new StringSink(cipherText)));
-        cipherText = strHexEncode(cipherText);
-        result = String::New(cipherText.c_str());
-        //Returning the result
-        if (args.Length() == 3){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[3]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            //Casting arguments
+            String::Utf8Value plainTextVal(args[0]->ToString());
+            String::AsciiValue curveNameVal(args[2]->ToString());
+            std::string plainText(*plainTextVal), curveName(*curveNameVal), cipherText;
+            Local<Object> publicKeyObj = Local<Object>::Cast(args[1]);
+            Local<Value> result = Local<Value>::New(Undefined());
+            OID curve = getPCurveFromName(curveName);
+            //Casting the public key and encrypting the plaintext
+            if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))) {
+                ThrowException(v8::Exception::TypeError(String::New("Invalid public key object")));
+                return scope.Close(Local<Value>::New(Undefined()));
+            }
+            AutoSeededRandomPool prng;
+            ECIES<ECP>::Encryptor e;
+            Local<String> xVal, yVal;
+            xVal = Local<String>::Cast(publicKeyObj->Get(String::New("x")));
+            yVal = Local<String>::Cast(publicKeyObj->Get(String::New("y")));
+            const ECPPoint publicKey(HexStrToInteger(*(String::AsciiValue(xVal))), HexStrToInteger(*(String::AsciiValue(yVal))));
+            e.AccessKey().AccessGroupParameters().Initialize(curve);
+            e.AccessKey().SetPublicElement(publicKey);
+            StringSource(plainText, true, new PK_EncryptorFilter(prng, e, new StringSink(cipherText)));
+            cipherText = strHexEncode(cipherText);
+            result = String::New(cipherText.c_str());
+            //Returning the result
+            if (args.Length() == 3){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[3]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -512,34 +543,39 @@ Handle<Value> eciesEncryptP(const Arguments& args){
 Handle<Value> eciesDecryptP(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 3 || args.Length() == 4){
-        //Casting the arguments
-        String::AsciiValue cipherTextVal(args[0]->ToString()), privateKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
-        std::string cipherText(*cipherTextVal), curveName(*curveNameVal), plainText;
-        const CryptoPP::Integer privateKey = HexStrToInteger(*privateKeyVal);
-        cipherText = strHexDecode(cipherText);
-        Local<Value> result = Local<Value>::New(Undefined());
-        OID curve = getPCurveFromName(curveName);
-        //Decrypting
-        AutoSeededRandomPool prng;
-        ECIES<ECP>::Decryptor d;
-        d.AccessKey().AccessGroupParameters().Initialize(curve);
-        d.AccessKey().SetPrivateExponent(privateKey);
         try {
-            StringSource(cipherText, true, new PK_DecryptorFilter(prng, d, new StringSink(plainText)));
-        } catch (CryptoPP::Exception const& ex){
-            std::cerr << "Exception : " << std::endl << ex.what() << std::endl;
-            std::cerr << "Error type : " << ex.GetErrorType() << std::endl;
-            std::cerr << "What : " << ex.GetWhat() << std::endl;
-        }
-        result = String::New(plainText.c_str());
-        //Returning the result
-        if (args.Length() == 3){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[3]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+            //Casting the arguments
+            String::AsciiValue cipherTextVal(args[0]->ToString()), privateKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
+            std::string cipherText(*cipherTextVal), curveName(*curveNameVal), plainText;
+            const CryptoPP::Integer privateKey = HexStrToInteger(*privateKeyVal);
+            cipherText = strHexDecode(cipherText);
+            Local<Value> result = Local<Value>::New(Undefined());
+            OID curve = getPCurveFromName(curveName);
+            //Decrypting
+            AutoSeededRandomPool prng;
+            ECIES<ECP>::Decryptor d;
+            d.AccessKey().AccessGroupParameters().Initialize(curve);
+            d.AccessKey().SetPrivateExponent(privateKey);
+            try {
+                StringSource(cipherText, true, new PK_DecryptorFilter(prng, d, new StringSink(plainText)));
+            } catch (CryptoPP::Exception const& ex){
+                std::cerr << "Exception : " << std::endl << ex.what() << std::endl;
+                std::cerr << "Error type : " << ex.GetErrorType() << std::endl;
+                std::cerr << "What : " << ex.GetWhat() << std::endl;
+            }
+            result = String::New(plainText.c_str());
+            //Returning the result
+            if (args.Length() == 3){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[3]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -552,37 +588,42 @@ Handle<Value> eciesDecryptP(const Arguments& args){
 Handle<Value> eciesEncryptB(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 3 || args.Length() == 4){
-        //Casting the arguments
-        String::Utf8Value plainTextVal(args[0]->ToString());
-        String::AsciiValue curveNameVal(args[2]->ToString());
-        std::string plainText(*plainTextVal), curveName(*curveNameVal), cipherText;
-        Local<Object> publicKeyObj = Local<Object>::Cast(args[1]);
-        Local<Value> result = Local<Value>::New(Undefined());
-        OID curve = getBCurveFromName(curveName);
-        //Casting the public key and encrypting the plaintext
-        if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))) {
-            ThrowException(v8::Exception::TypeError(String::New("Invalid public key object")));
-            return scope.Close(Local<Value>::New(Undefined()));
-        }
-        AutoSeededRandomPool prng;
-        ECIES<EC2N>::Encryptor e;
-        Local<String> xVal, yVal;
-        xVal = Local<String>::Cast(publicKeyObj->Get(String::New("x")));
-        yVal = Local<String>::Cast(publicKeyObj->Get(String::New("y")));
-        const EC2NPoint publicKey(HexStrToPolynomialMod2(*(String::AsciiValue(xVal))), HexStrToPolynomialMod2(*(String::AsciiValue(yVal))));
-        e.AccessKey().AccessGroupParameters().Initialize(curve);
-        e.AccessKey().SetPublicElement(publicKey);
-        StringSource(plainText, true, new PK_EncryptorFilter(prng, e, new StringSink(cipherText)));
-        cipherText = strHexEncode(cipherText);
-        result = String::New(cipherText.c_str());
-        //Returning the result
-        if (args.Length() == 3){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[3]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            //Casting the arguments
+            String::Utf8Value plainTextVal(args[0]->ToString());
+            String::AsciiValue curveNameVal(args[2]->ToString());
+            std::string plainText(*plainTextVal), curveName(*curveNameVal), cipherText;
+            Local<Object> publicKeyObj = Local<Object>::Cast(args[1]);
+            Local<Value> result = Local<Value>::New(Undefined());
+            OID curve = getBCurveFromName(curveName);
+            //Casting the public key and encrypting the plaintext
+            if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))) {
+                ThrowException(v8::Exception::TypeError(String::New("Invalid public key object")));
+                return scope.Close(Local<Value>::New(Undefined()));
+            }
+            AutoSeededRandomPool prng;
+            ECIES<EC2N>::Encryptor e;
+            Local<String> xVal, yVal;
+            xVal = Local<String>::Cast(publicKeyObj->Get(String::New("x")));
+            yVal = Local<String>::Cast(publicKeyObj->Get(String::New("y")));
+            const EC2NPoint publicKey(HexStrToPolynomialMod2(*(String::AsciiValue(xVal))), HexStrToPolynomialMod2(*(String::AsciiValue(yVal))));
+            e.AccessKey().AccessGroupParameters().Initialize(curve);
+            e.AccessKey().SetPublicElement(publicKey);
+            StringSource(plainText, true, new PK_EncryptorFilter(prng, e, new StringSink(cipherText)));
+            cipherText = strHexEncode(cipherText);
+            result = String::New(cipherText.c_str());
+            //Returning the result
+            if (args.Length() == 3){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[3]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -595,28 +636,33 @@ Handle<Value> eciesEncryptB(const Arguments& args){
 Handle<Value> eciesDecryptB(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 3 || args.Length() == 4){
-        //Casting the arguments
-        String::AsciiValue cipherTextVal(args[0]->ToString()), privateKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
-        std::string cipherText(*cipherTextVal), curveName(*curveNameVal), plainText;
-        const CryptoPP::Integer privateKey(HexStrToInteger(*privateKeyVal));
-        cipherText = strHexDecode(cipherText);
-        Local<Value> result = Local<Value>::New(Undefined());
-        OID curve = getBCurveFromName(curveName);
-        //Decrypting the ciphertext
-        AutoSeededRandomPool prng;
-        ECIES<EC2N>::Decryptor d;
-        d.AccessKey().AccessGroupParameters().Initialize(curve);
-        d.AccessKey().SetPrivateExponent(privateKey);
-        StringSource(cipherText, true, new PK_DecryptorFilter(prng, d, new StringSink(plainText)));
-        result = String::New(plainText.c_str());
-        //Returning the result
-        if (args.Length() == 3){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[3]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            //Casting the arguments
+            String::AsciiValue cipherTextVal(args[0]->ToString()), privateKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
+            std::string cipherText(*cipherTextVal), curveName(*curveNameVal), plainText;
+            const CryptoPP::Integer privateKey(HexStrToInteger(*privateKeyVal));
+            cipherText = strHexDecode(cipherText);
+            Local<Value> result = Local<Value>::New(Undefined());
+            OID curve = getBCurveFromName(curveName);
+            //Decrypting the ciphertext
+            AutoSeededRandomPool prng;
+            ECIES<EC2N>::Decryptor d;
+            d.AccessKey().AccessGroupParameters().Initialize(curve);
+            d.AccessKey().SetPrivateExponent(privateKey);
+            StringSource(cipherText, true, new PK_DecryptorFilter(prng, d, new StringSink(plainText)));
+            result = String::New(plainText.c_str());
+            //Returning the result
+            if (args.Length() == 3){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[3]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -633,36 +679,41 @@ Handle<Value> eciesDecryptB(const Arguments& args){
 Handle<Value> ecdsaGenerateKeyPairP(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
-        String::AsciiValue curveNameVal(args[0]->ToString());
-        std::string curveName(*curveNameVal);
-        Local<Value> result = Local<Value>::New(Undefined());
-        //Checking the existence of the curve
-        OID curve = getPCurveFromName(curveName);
-        //Generating the private key, then the public key.
-        AutoSeededRandomPool prng;
-        ECDSA<ECP, SHA256>::PrivateKey privateKey;
-        ECDSA<ECP, SHA256>::PublicKey publicKey;
-        privateKey.Initialize(prng, curve);
-        privateKey.MakePublicKey(publicKey);
-        // Extracting the values of each key
-        const CryptoPP::Integer privateExponent = privateKey.GetPrivateExponent();
-        const ECPPoint publicPoint = publicKey.GetPublicElement();
-        Local<Object> keyPair = Object::New();
-        keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
-        keyPair->Set(String::NewSymbol("privateKey"), String::New(IntegerToHexStr(privateExponent).c_str()));
-        Local<Object> publicKeyObj = Object::New();
-        publicKeyObj->Set(String::NewSymbol("x"), String::New(IntegerToHexStr(publicPoint.x).c_str()));
-        publicKeyObj->Set(String::NewSymbol("y"), String::New(IntegerToHexStr(publicPoint.y).c_str()));
-        keyPair->Set(String::NewSymbol("publicKey"), publicKeyObj);
-        result = keyPair;
-       //Returning the result
-        if (args.Length() == 1){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[1]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            String::AsciiValue curveNameVal(args[0]->ToString());
+            std::string curveName(*curveNameVal);
+            Local<Value> result = Local<Value>::New(Undefined());
+            //Checking the existence of the curve
+            OID curve = getPCurveFromName(curveName);
+            //Generating the private key, then the public key.
+            AutoSeededRandomPool prng;
+            ECDSA<ECP, SHA256>::PrivateKey privateKey;
+            ECDSA<ECP, SHA256>::PublicKey publicKey;
+            privateKey.Initialize(prng, curve);
+            privateKey.MakePublicKey(publicKey);
+            // Extracting the values of each key
+            const CryptoPP::Integer privateExponent = privateKey.GetPrivateExponent();
+            const ECPPoint publicPoint = publicKey.GetPublicElement();
+            Local<Object> keyPair = Object::New();
+            keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
+            keyPair->Set(String::NewSymbol("privateKey"), String::New(IntegerToHexStr(privateExponent).c_str()));
+            Local<Object> publicKeyObj = Object::New();
+            publicKeyObj->Set(String::NewSymbol("x"), String::New(IntegerToHexStr(publicPoint.x).c_str()));
+            publicKeyObj->Set(String::NewSymbol("y"), String::New(IntegerToHexStr(publicPoint.y).c_str()));
+            keyPair->Set(String::NewSymbol("publicKey"), publicKeyObj);
+            result = keyPair;
+           //Returning the result
+            if (args.Length() == 1){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[1]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -675,46 +726,51 @@ Handle<Value> ecdsaGenerateKeyPairP(const Arguments& args){
 Handle<Value> ecdsaSignMessageP(const Arguments& args){
     HandleScope scope;
     if (args.Length() >= 3 && args.Length() <= 5){
-        String::Utf8Value messageVal(args[0]->ToString());
-        String::AsciiValue privateKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
-        std::string curveName(*curveNameVal), message(*messageVal), privateKeyStr(*privateKeyVal), signature, hashName = "";
-        if (args.Length() >= 4){
-            if (!args[3]->IsUndefined()){
-                String::Utf8Value hashNameVal(args[3]->ToString());
-                hashName = std::string(*hashNameVal);
-                if (!(hashName == "sha1" || hashName == "sha256")){
-                    ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
-                    return scope.Close(Undefined());
+        try {
+            String::Utf8Value messageVal(args[0]->ToString());
+            String::AsciiValue privateKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
+            std::string curveName(*curveNameVal), message(*messageVal), privateKeyStr(*privateKeyVal), signature, hashName = "";
+            if (args.Length() >= 4){
+                if (!args[3]->IsUndefined()){
+                    String::Utf8Value hashNameVal(args[3]->ToString());
+                    hashName = std::string(*hashNameVal);
+                    if (!(hashName == "sha1" || hashName == "sha256")){
+                        ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
+                        return scope.Close(Undefined());
+                    }
                 }
             }
-        }
-        Local<Value> result = Local<Value>::New(Undefined());
-        //Checking the existence of the curve
-        OID curve = getPCurveFromName(curveName);
-        //Method body
-        AutoSeededRandomPool prng;
-        if (hashName == "" || hashName == "sha1"){
-            ECDSA<ECP, SHA1>::PrivateKey privateKey;
-            privateKey.Initialize(prng, curve);
-            privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
-            StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA1>::Signer(privateKey), new StringSink(signature)));
-        } else {
-            ECDSA<ECP, SHA256>::PrivateKey privateKey;
-            privateKey.Initialize(prng, curve);
-            privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
-            StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA256>::Signer(privateKey), new StringSink(signature)));
-        }
-        signature = strHexEncode(signature);
-        result = String::New(signature.c_str());
-        // Returning the result
-        if (args.Length() < 5){
-            return scope.Close(result);
-        } else {
-            if (args[4]->IsUndefined()) return scope.Close(result);
-            Local<Function> callback = Local<Function>::Cast(args[4]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+            Local<Value> result = Local<Value>::New(Undefined());
+            //Checking the existence of the curve
+            OID curve = getPCurveFromName(curveName);
+            //Method body
+            AutoSeededRandomPool prng;
+            if (hashName == "" || hashName == "sha1"){
+                ECDSA<ECP, SHA1>::PrivateKey privateKey;
+                privateKey.Initialize(prng, curve);
+                privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
+                StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA1>::Signer(privateKey), new StringSink(signature)));
+            } else {
+                ECDSA<ECP, SHA256>::PrivateKey privateKey;
+                privateKey.Initialize(prng, curve);
+                privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
+                StringSource(message, true, new SignerFilter(prng, ECDSA<ECP, SHA256>::Signer(privateKey), new StringSink(signature)));
+            }
+            signature = strHexEncode(signature);
+            result = String::New(signature.c_str());
+            // Returning the result
+            if (args.Length() < 5){
+                return scope.Close(result);
+            } else {
+                if (args[4]->IsUndefined()) return scope.Close(result);
+                Local<Function> callback = Local<Function>::Cast(args[4]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -727,57 +783,62 @@ Handle<Value> ecdsaSignMessageP(const Arguments& args){
 Handle<Value> ecdsaVerifyMessageP(const Arguments& args){
     HandleScope scope;
     if (args.Length() >= 4 && args.Length() <= 6){
-        String::Utf8Value messageVal(args[0]->ToString());
-        String::AsciiValue signatureVal(args[1]->ToString()), curveNameVal(args[3]->ToString());
-        Local<Object> publicKeyObj = Local<Object>::Cast(args[2]);
-        std::string message(*messageVal), signature(*signatureVal), curveName(*curveNameVal), hashName = "";
-        if (args.Length() >= 5){
-            if (!args[4]->IsUndefined()){
-                String::Utf8Value hashNameVal(args[4]->ToString());
-                hashName = std::string(*hashNameVal);
-                if (!(hashName == "sha1" || hashName == "sha256")){
-                    ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
-                    return scope.Close(Undefined());
+        try {
+            String::Utf8Value messageVal(args[0]->ToString());
+            String::AsciiValue signatureVal(args[1]->ToString()), curveNameVal(args[3]->ToString());
+            Local<Object> publicKeyObj = Local<Object>::Cast(args[2]);
+            std::string message(*messageVal), signature(*signatureVal), curveName(*curveNameVal), hashName = "";
+            if (args.Length() >= 5){
+                if (!args[4]->IsUndefined()){
+                    String::Utf8Value hashNameVal(args[4]->ToString());
+                    hashName = std::string(*hashNameVal);
+                    if (!(hashName == "sha1" || hashName == "sha256")){
+                        ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
+                        return scope.Close(Undefined());
+                    }
                 }
             }
-        }
-        //Checking the existence of the curve
-        if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))){
-            ThrowException(v8::Exception::TypeError(String::New("Invalid public key object")));
-            return scope.Close(Local<Value>::New(Undefined()));
-        }
-        OID curve = getPCurveFromName(curveName);
-        //Method body
-        bool valid = false;
-        AutoSeededRandomPool prng;
-        if (hashName == "" || hashName == "sha1"){
-            ECDSA<ECP, SHA1>::PublicKey publicKey;
-            Local<String> xVal, yVal;
-            xVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("x")));
-            yVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("y")));
-            const ECPPoint publicElement(HexStrToInteger(*(String::AsciiValue(xVal))), HexStrToInteger(*(String::AsciiValue(yVal))));
-            publicKey.Initialize(curve, publicElement);
-            signature = strHexDecode(signature);
-            StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<ECP, SHA1>::Verifier(publicKey), new ArraySink( (byte*)&valid, sizeof(valid) )));
-        } else {
-            ECDSA<ECP, SHA256>::PublicKey publicKey;
-            Local<String> xVal, yVal;
-            xVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("x")));
-            yVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("y")));
-            const ECPPoint publicElement(HexStrToInteger(*(String::AsciiValue(xVal))), HexStrToInteger(*(String::AsciiValue(yVal))));
-            publicKey.Initialize(curve, publicElement);
-            signature = strHexDecode(signature);
-            StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<ECP, SHA256>::Verifier(publicKey), new ArraySink( (byte*)&valid, sizeof(valid) )));
-        }
-        //Returning the result
-        if (args.Length() < 6){
-            return scope.Close(Boolean::New(valid));
-        } else {
-            if (args[5]->IsUndefined()) return scope.Close(Boolean::New(valid));
-            Local<Function> callback = Local<Function>::Cast(args[5]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(valid)) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+            //Checking the existence of the curve
+            if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))){
+                ThrowException(v8::Exception::TypeError(String::New("Invalid public key object")));
+                return scope.Close(Local<Value>::New(Undefined()));
+            }
+            OID curve = getPCurveFromName(curveName);
+            //Method body
+            bool valid = false;
+            AutoSeededRandomPool prng;
+            if (hashName == "" || hashName == "sha1"){
+                ECDSA<ECP, SHA1>::PublicKey publicKey;
+                Local<String> xVal, yVal;
+                xVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("x")));
+                yVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("y")));
+                const ECPPoint publicElement(HexStrToInteger(*(String::AsciiValue(xVal))), HexStrToInteger(*(String::AsciiValue(yVal))));
+                publicKey.Initialize(curve, publicElement);
+                signature = strHexDecode(signature);
+                StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<ECP, SHA1>::Verifier(publicKey), new ArraySink( (byte*)&valid, sizeof(valid) )));
+            } else {
+                ECDSA<ECP, SHA256>::PublicKey publicKey;
+                Local<String> xVal, yVal;
+                xVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("x")));
+                yVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("y")));
+                const ECPPoint publicElement(HexStrToInteger(*(String::AsciiValue(xVal))), HexStrToInteger(*(String::AsciiValue(yVal))));
+                publicKey.Initialize(curve, publicElement);
+                signature = strHexDecode(signature);
+                StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<ECP, SHA256>::Verifier(publicKey), new ArraySink( (byte*)&valid, sizeof(valid) )));
+            }
+            //Returning the result
+            if (args.Length() < 6){
+                return scope.Close(Boolean::New(valid));
+            } else {
+                if (args[5]->IsUndefined()) return scope.Close(Boolean::New(valid));
+                Local<Function> callback = Local<Function>::Cast(args[5]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(valid)) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -791,36 +852,41 @@ Handle<Value> ecdsaVerifyMessageP(const Arguments& args){
 Handle<Value> ecdsaGenerateKeyPairB(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
-        //Casting the curveName parameter
-        String::AsciiValue curveNameVal(args[0]->ToString());
-        std::string curveName(*curveNameVal);
-        Local<Value> result = Local<Value>::New(Undefined());
-        OID curve = getBCurveFromName(curveName);
-        //Generating the keypair
-        AutoSeededRandomPool prng;
-        ECDSA<EC2N, SHA256>::PrivateKey privateKey;
-        ECDSA<EC2N, SHA256>::PublicKey publicKey;
-        privateKey.Initialize(prng, curve);
-        privateKey.MakePublicKey(publicKey);
-        //Building the result object
-        const CryptoPP::Integer privateExponent = privateKey.GetPrivateExponent();
-        const CryptoPP::EC2NPoint publicPoint = publicKey.GetPublicElement();
-        Local<Object> keyPair = Object::New();
-        keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
-        keyPair->Set(String::NewSymbol("privateKey"), String::New(IntegerToHexStr(privateExponent).c_str()));
-        Local<Object> pubKeyObj = Object::New();
-        pubKeyObj->Set(String::NewSymbol("x"), String::New(PolynomialMod2ToHexStr(publicPoint.x).c_str()));
-        pubKeyObj->Set(String::NewSymbol("y"), String::New(PolynomialMod2ToHexStr(publicPoint.y).c_str()));
-        keyPair->Set(String::NewSymbol("publicKey"), pubKeyObj);
-        result = keyPair;
-        //Return the resulting object
-        if (args.Length() == 1){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[1]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            //Casting the curveName parameter
+            String::AsciiValue curveNameVal(args[0]->ToString());
+            std::string curveName(*curveNameVal);
+            Local<Value> result = Local<Value>::New(Undefined());
+            OID curve = getBCurveFromName(curveName);
+            //Generating the keypair
+            AutoSeededRandomPool prng;
+            ECDSA<EC2N, SHA256>::PrivateKey privateKey;
+            ECDSA<EC2N, SHA256>::PublicKey publicKey;
+            privateKey.Initialize(prng, curve);
+            privateKey.MakePublicKey(publicKey);
+            //Building the result object
+            const CryptoPP::Integer privateExponent = privateKey.GetPrivateExponent();
+            const CryptoPP::EC2NPoint publicPoint = publicKey.GetPublicElement();
+            Local<Object> keyPair = Object::New();
+            keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
+            keyPair->Set(String::NewSymbol("privateKey"), String::New(IntegerToHexStr(privateExponent).c_str()));
+            Local<Object> pubKeyObj = Object::New();
+            pubKeyObj->Set(String::NewSymbol("x"), String::New(PolynomialMod2ToHexStr(publicPoint.x).c_str()));
+            pubKeyObj->Set(String::NewSymbol("y"), String::New(PolynomialMod2ToHexStr(publicPoint.y).c_str()));
+            keyPair->Set(String::NewSymbol("publicKey"), pubKeyObj);
+            result = keyPair;
+            //Return the resulting object
+            if (args.Length() == 1){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[1]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -833,38 +899,43 @@ Handle<Value> ecdsaGenerateKeyPairB(const Arguments& args){
 Handle<Value> ecdsaSignMessageB(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 3 || args.Length() == 4){
-        //Casting parameters
-        String::Utf8Value messageVal(args[0]->ToString());
-        String::AsciiValue curveNameVal(args[1]->ToString()), privateKeyVal(args[2]->ToString());
-        std::string message(*messageVal), curveName(*curveNameVal), privateKeyStr(*privateKeyVal), signature;
-        Local<Value> result = Local<Value>::New(Undefined());
-        //Checking curve existence and loading it.
         try {
-            OID curve = getBCurveFromName(curveName);
-            std::cout << "Curve OID loaded" << std::endl;
-            //Generating the signature
-            AutoSeededRandomPool prng;
-            std::cout << "Generator initialized" << std::endl;
-            ECDSA<EC2N, SHA256>::PrivateKey privateKey;
-            privateKey.Initialize(prng, curve);
-            std::cout << "Curve initialized" << std::endl;
-            privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
-            std::cout << "Key initialized" << std::endl;
-            StringSource(message, true, new SignerFilter(prng, ECDSA<EC2N, SHA256>::Signer(privateKey), new StringSink(signature)));
-            signature = strHexEncode(signature);
-            result = String::New(signature.c_str());
+            //Casting parameters
+            String::Utf8Value messageVal(args[0]->ToString());
+            String::AsciiValue curveNameVal(args[1]->ToString()), privateKeyVal(args[2]->ToString());
+            std::string message(*messageVal), curveName(*curveNameVal), privateKeyStr(*privateKeyVal), signature;
+            Local<Value> result = Local<Value>::New(Undefined());
+            //Checking curve existence and loading it.
+            try {
+                OID curve = getBCurveFromName(curveName);
+                std::cout << "Curve OID loaded" << std::endl;
+                //Generating the signature
+                AutoSeededRandomPool prng;
+                std::cout << "Generator initialized" << std::endl;
+                ECDSA<EC2N, SHA256>::PrivateKey privateKey;
+                privateKey.Initialize(prng, curve);
+                std::cout << "Curve initialized" << std::endl;
+                privateKey.SetPrivateExponent(HexStrToInteger(privateKeyStr));
+                std::cout << "Key initialized" << std::endl;
+                StringSource(message, true, new SignerFilter(prng, ECDSA<EC2N, SHA256>::Signer(privateKey), new StringSink(signature)));
+                signature = strHexEncode(signature);
+                result = String::New(signature.c_str());
+            } catch (CryptoPP::Exception& e){
+                std::cout << "An exception occured :" << std::endl << e.what() << std::endl;
+                ThrowException(v8::Exception::TypeError(String::New(e.what())));
+                return scope.Close(Undefined());
+            }
+            if (args.Length() == 3){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[3]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
         } catch (CryptoPP::Exception& e){
-            std::cout << "An exception occured :" << std::endl << e.what() << std::endl;
-            ThrowException(v8::Exception::TypeError(String::New(e.what())));
-            return scope.Close(Undefined());
-        }
-        if (args.Length() == 3){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[3]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -877,36 +948,41 @@ Handle<Value> ecdsaSignMessageB(const Arguments& args){
 Handle<Value> ecdsaVerifyMessageB(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 4 || args.Length() == 5){
-        //Casting parameters
-        String::Utf8Value messageVal(args[0]->ToString());
-        String::AsciiValue signatureVal(args[1]->ToString()), curveNameVal(args[3]->ToString());
-        std::string message(*messageVal), signature(*signatureVal), curveName(*curveNameVal);
-        bool isValid = false;
-        Local<Object> publicKeyObj = Local<Object>::Cast(args[2]);
-        //Checking curve existence and loading it. Checking attributes of public key object
-        if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))){
-            ThrowException(v8::Exception::TypeError(String::New("Invalid public key object")));
-            return scope.Close(Local<Value>::New(Undefined()));
-        }
-        OID curve = getBCurveFromName(curveName);
-        //Verifying signature
-        AutoSeededRandomPool prng;
-        ECDSA<EC2N, SHA256>::PublicKey publicKey;
-        Local<String> xVal, yVal;
-        xVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("x")));
-        yVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("y")));
-        const EC2NPoint publicElement(HexStrToPolynomialMod2(*(String::AsciiValue(xVal))), HexStrToPolynomialMod2(*(String::AsciiValue(yVal))));
-        publicKey.Initialize(curve, publicElement);
-        signature = strHexDecode(signature);
-        StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<EC2N, SHA256>::Verifier(publicKey), new ArraySink( (byte*) &isValid, sizeof(isValid) )));
-        //Return the result
-        if (args.Length() == 4){
-            return scope.Close(Boolean::New(isValid));
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[4]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(isValid)) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            //Casting parameters
+            String::Utf8Value messageVal(args[0]->ToString());
+            String::AsciiValue signatureVal(args[1]->ToString()), curveNameVal(args[3]->ToString());
+            std::string message(*messageVal), signature(*signatureVal), curveName(*curveNameVal);
+            bool isValid = false;
+            Local<Object> publicKeyObj = Local<Object>::Cast(args[2]);
+            //Checking curve existence and loading it. Checking attributes of public key object
+            if (!(publicKeyObj->Has(String::New("x")) && publicKeyObj->Has(String::New("y")))){
+                ThrowException(v8::Exception::TypeError(String::New("Invalid public key object")));
+                return scope.Close(Local<Value>::New(Undefined()));
+            }
+            OID curve = getBCurveFromName(curveName);
+            //Verifying signature
+            AutoSeededRandomPool prng;
+            ECDSA<EC2N, SHA256>::PublicKey publicKey;
+            Local<String> xVal, yVal;
+            xVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("x")));
+            yVal = Local<String>::Cast(publicKeyObj->Get(String::NewSymbol("y")));
+            const EC2NPoint publicElement(HexStrToPolynomialMod2(*(String::AsciiValue(xVal))), HexStrToPolynomialMod2(*(String::AsciiValue(yVal))));
+            publicKey.Initialize(curve, publicElement);
+            signature = strHexDecode(signature);
+            StringSource(signature+message, true, new SignatureVerificationFilter(ECDSA<EC2N, SHA256>::Verifier(publicKey), new ArraySink( (byte*) &isValid, sizeof(isValid) )));
+            //Return the result
+            if (args.Length() == 4){
+                return scope.Close(Boolean::New(isValid));
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[4]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(isValid)) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -921,29 +997,34 @@ Handle<Value> ecdsaVerifyMessageB(const Arguments& args){
 Handle<Value> ecdhGenerateKeyPairP(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
-        String::AsciiValue curveNameVal(args[0]->ToString());
-        std::string curveName(*curveNameVal);
-        Local<Value> result = Local<Value>::New(Undefined());
-        //Checking the existence of the curve
-        OID curve = getPCurveFromName(curveName);
-        //Method body
-        AutoSeededX917RNG<AES> prng;
-        ECDH<ECP>::Domain dhDomain(curve);
-        SecByteBlock privKey(dhDomain.PrivateKeyLength()), publicKey(dhDomain.PublicKeyLength());
-        dhDomain.GenerateKeyPair(prng, privKey, publicKey);
-        Local<Object> keyPair = Object::New();
-        keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
-        keyPair->Set(String::NewSymbol("privateKey"), String::New(SecByteBlockToHexStr(privKey).c_str()));
-        keyPair->Set(String::NewSymbol("publicKey"), String::New(SecByteBlockToHexStr(publicKey).c_str()));
-        result = keyPair;
-        //Returning the result
-        if (args.Length() == 1){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[1]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            String::AsciiValue curveNameVal(args[0]->ToString());
+            std::string curveName(*curveNameVal);
+            Local<Value> result = Local<Value>::New(Undefined());
+            //Checking the existence of the curve
+            OID curve = getPCurveFromName(curveName);
+            //Method body
+            AutoSeededX917RNG<AES> prng;
+            ECDH<ECP>::Domain dhDomain(curve);
+            SecByteBlock privKey(dhDomain.PrivateKeyLength()), publicKey(dhDomain.PublicKeyLength());
+            dhDomain.GenerateKeyPair(prng, privKey, publicKey);
+            Local<Object> keyPair = Object::New();
+            keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
+            keyPair->Set(String::NewSymbol("privateKey"), String::New(SecByteBlockToHexStr(privKey).c_str()));
+            keyPair->Set(String::NewSymbol("publicKey"), String::New(SecByteBlockToHexStr(publicKey).c_str()));
+            result = keyPair;
+            //Returning the result
+            if (args.Length() == 1){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[1]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -957,26 +1038,31 @@ Handle<Value> ecdhGenerateKeyPairP(const Arguments& args){
 Handle<Value> ecdhAgreeP(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 3 || args.Length() == 4){
-        String::AsciiValue privateKeyVal(args[0]->ToString()), publicKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
-        std::string curveName(*curveNameVal), privateKeyStr(*privateKeyVal), publicKeyStr(*publicKeyVal);
-        Local<Value> result = Local<Value>::New(Undefined());
-        //Checking the existence of the curve
-        OID curve = getPCurveFromName(curveName);
-        //Method body
-        ECDH<ECP>::Domain dhDomain(curve);
-        SecByteBlock privateKey = HexStrToSecByteBlock(privateKeyStr);
-        SecByteBlock publicKey = HexStrToSecByteBlock(publicKeyStr);
-        SecByteBlock secret(dhDomain.AgreedValueLength());
-        dhDomain.Agree(secret, privateKey, publicKey);
-        result = String::New(SecByteBlockToHexStr(secret).c_str());
-        //Returning the result
-        if (args.Length() == 3){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[3]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            String::AsciiValue privateKeyVal(args[0]->ToString()), publicKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
+            std::string curveName(*curveNameVal), privateKeyStr(*privateKeyVal), publicKeyStr(*publicKeyVal);
+            Local<Value> result = Local<Value>::New(Undefined());
+            //Checking the existence of the curve
+            OID curve = getPCurveFromName(curveName);
+            //Method body
+            ECDH<ECP>::Domain dhDomain(curve);
+            SecByteBlock privateKey = HexStrToSecByteBlock(privateKeyStr);
+            SecByteBlock publicKey = HexStrToSecByteBlock(publicKeyStr);
+            SecByteBlock secret(dhDomain.AgreedValueLength());
+            dhDomain.Agree(secret, privateKey, publicKey);
+            result = String::New(SecByteBlockToHexStr(secret).c_str());
+            //Returning the result
+            if (args.Length() == 3){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[3]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -989,28 +1075,33 @@ Handle<Value> ecdhAgreeP(const Arguments& args){
 Handle<Value> ecdhGenerateKeyPairB(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
-        String::AsciiValue curveNameVal(args[0]->ToString());
-        std::string curveName(*curveNameVal);
-        Local<Value> result = Local<Value>::New(Undefined());
-        //Checking curve existence and loading it.
-        OID curve = getBCurveFromName(curveName);
-        //Method body
-        AutoSeededX917RNG<AES> prng;
-        ECDH<EC2N>::Domain dhDomain(curve);
-        SecByteBlock privKey(dhDomain.PrivateKeyLength()), pubKey(dhDomain.PublicKeyLength());
-        dhDomain.GenerateKeyPair(prng, privKey, pubKey);
-        Local<Object> keyPair = Object::New();
-        keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
-        keyPair->Set(String::NewSymbol("privateKey"), String::New(SecByteBlockToHexStr(privKey).c_str()));
-        keyPair->Set(String::NewSymbol("publicKey"), String::New(SecByteBlockToHexStr(pubKey).c_str()));
-        result = keyPair;
-        if (args.Length() == 1){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[1]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            String::AsciiValue curveNameVal(args[0]->ToString());
+            std::string curveName(*curveNameVal);
+            Local<Value> result = Local<Value>::New(Undefined());
+            //Checking curve existence and loading it.
+            OID curve = getBCurveFromName(curveName);
+            //Method body
+            AutoSeededX917RNG<AES> prng;
+            ECDH<EC2N>::Domain dhDomain(curve);
+            SecByteBlock privKey(dhDomain.PrivateKeyLength()), pubKey(dhDomain.PublicKeyLength());
+            dhDomain.GenerateKeyPair(prng, privKey, pubKey);
+            Local<Object> keyPair = Object::New();
+            keyPair->Set(String::NewSymbol("curveName"), String::New(curveName.c_str()));
+            keyPair->Set(String::NewSymbol("privateKey"), String::New(SecByteBlockToHexStr(privKey).c_str()));
+            keyPair->Set(String::NewSymbol("publicKey"), String::New(SecByteBlockToHexStr(pubKey).c_str()));
+            result = keyPair;
+            if (args.Length() == 1){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[1]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -1023,26 +1114,31 @@ Handle<Value> ecdhGenerateKeyPairB(const Arguments& args){
 Handle<Value> ecdhAgreeB(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 3 || args.Length() == 4){
-        String::AsciiValue privateKeyVal(args[0]->ToString()), publicKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
-        std::string curveName(*curveNameVal), privateKeyStr(*privateKeyVal), publicKeyStr(*publicKeyVal);
-        Local<Value> result = Local<Value>::New(Undefined());
-        //Checking curve existence and loading it
-        OID curve = getBCurveFromName(curveName);
-        //Method body
-        ECDH<EC2N>::Domain dhDomain(curve);
-        SecByteBlock privateKey = HexStrToSecByteBlock(privateKeyStr);
-        SecByteBlock publicKey = HexStrToSecByteBlock(publicKeyStr);
-        SecByteBlock secret(dhDomain.AgreedValueLength());
-        dhDomain.Agree(secret, privateKey, publicKey);
-        result = String::New(SecByteBlockToHexStr(secret).c_str());
-        //Returning the result
-        if (args.Length() == 3){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[3]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            String::AsciiValue privateKeyVal(args[0]->ToString()), publicKeyVal(args[1]->ToString()), curveNameVal(args[2]->ToString());
+            std::string curveName(*curveNameVal), privateKeyStr(*privateKeyVal), publicKeyStr(*publicKeyVal);
+            Local<Value> result = Local<Value>::New(Undefined());
+            //Checking curve existence and loading it
+            OID curve = getBCurveFromName(curveName);
+            //Method body
+            ECDH<EC2N>::Domain dhDomain(curve);
+            SecByteBlock privateKey = HexStrToSecByteBlock(privateKeyStr);
+            SecByteBlock publicKey = HexStrToSecByteBlock(publicKeyStr);
+            SecByteBlock secret(dhDomain.AgreedValueLength());
+            dhDomain.Agree(secret, privateKey, publicKey);
+            result = String::New(SecByteBlockToHexStr(secret).c_str());
+            //Returning the result
+            if (args.Length() == 3){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[3]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -1059,44 +1155,49 @@ Handle<Value> ecdhAgreeB(const Arguments& args){
 Handle<Value> rsaGenerateKeyPair(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
-        Local<Value> result;
-        //Casting the keySize parameters
-        Local<v8::Integer> keySizeVal = Local<v8::Integer>::Cast(args[0]);
-        int keySize = keySizeVal->Value();
-        //Checking the user provided key size
-        if (!(keySize >= 1024 && keySize <= 16384)) {
-            ThrowException(v8::Exception::RangeError(String::New("Invalid key size. Allowed key sizes : between 1024 and 16384 bits")));
-            return scope.Close(Undefined());
-        }
-        /*bool validKeySize = false;
-        int testedKeySize = 1024;
-        while (testedKeySize <= 16384){
-            if (testedKeySize == keySize) {
-                validKeySize = true;
-                break;
-            } else testedKeySize *= 2;
-        }
-        if (!validKeySize) {
-            ThrowException(v8::Exception::RangeError(String::New("Invalid key size. Allowed key sizes : 1024, 2048, 4096, 8192, 16384 bits")));
-            return scope.Close(Undefined());
-        }*/
-        //Generating the key pair
-        AutoSeededRandomPool prng;
-        InvertibleRSAFunction keyPairParams;
-        keyPairParams.GenerateRandomWithKeySize(prng, keySize);
-        //Building the result object
-        Local<Object> keyPair = Object::New();
-        keyPair->Set(String::NewSymbol("modulus"), String::New(IntegerToHexStr(keyPairParams.GetModulus()).c_str()));
-        keyPair->Set(String::NewSymbol("publicExponent"), String::New(IntegerToHexStr(keyPairParams.GetPublicExponent()).c_str()));
-        keyPair->Set(String::NewSymbol("privateExponent"), String::New(IntegerToHexStr(keyPairParams.GetPrivateExponent()).c_str()));
-        result = keyPair;
-        if (args.Length() == 1){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[1]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            Local<Value> result;
+            //Casting the keySize parameters
+            Local<v8::Integer> keySizeVal = Local<v8::Integer>::Cast(args[0]);
+            int keySize = keySizeVal->Value();
+            //Checking the user provided key size
+            if (!(keySize >= 1024 && keySize <= 16384)) {
+                ThrowException(v8::Exception::RangeError(String::New("Invalid key size. Allowed key sizes : between 1024 and 16384 bits")));
+                return scope.Close(Undefined());
+            }
+            /*bool validKeySize = false;
+            int testedKeySize = 1024;
+            while (testedKeySize <= 16384){
+                if (testedKeySize == keySize) {
+                    validKeySize = true;
+                    break;
+                } else testedKeySize *= 2;
+            }
+            if (!validKeySize) {
+                ThrowException(v8::Exception::RangeError(String::New("Invalid key size. Allowed key sizes : 1024, 2048, 4096, 8192, 16384 bits")));
+                return scope.Close(Undefined());
+            }*/
+            //Generating the key pair
+            AutoSeededRandomPool prng;
+            InvertibleRSAFunction keyPairParams;
+            keyPairParams.GenerateRandomWithKeySize(prng, keySize);
+            //Building the result object
+            Local<Object> keyPair = Object::New();
+            keyPair->Set(String::NewSymbol("modulus"), String::New(IntegerToHexStr(keyPairParams.GetModulus()).c_str()));
+            keyPair->Set(String::NewSymbol("publicExponent"), String::New(IntegerToHexStr(keyPairParams.GetPublicExponent()).c_str()));
+            keyPair->Set(String::NewSymbol("privateExponent"), String::New(IntegerToHexStr(keyPairParams.GetPrivateExponent()).c_str()));
+            result = keyPair;
+            if (args.Length() == 1){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[1]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -1109,27 +1210,32 @@ Handle<Value> rsaGenerateKeyPair(const Arguments& args){
 Handle<Value> rsaEncrypt(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 3 || args.Length() == 4){
-        //Casting arguments
-        String::Utf8Value plainTextVal(args[0]->ToString());
-        String::AsciiValue modulusVal(args[1]->ToString()), publicExpVal(args[2]->ToString());
-        std::string plainText(*plainTextVal), modulusStr(*modulusVal), publicExpStr(*publicExpVal), cipherText;
-        Local<Value> result;
-        //Encrypting the plainText
-        AutoSeededRandomPool prng;
-        RSAFunction publicParams;
-        publicParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr));
-        RSA::PublicKey publicKey(publicParams);
-        RSAES_OAEP_SHA_Encryptor encryptor(publicKey);
-        StringSource(plainText, true, new PK_EncryptorFilter(prng, encryptor, new StringSink(cipherText)));
-        result = String::New(strHexEncode(cipherText).c_str());
-        //Returning the result
-        if (args.Length() == 3){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[3]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            //Casting arguments
+            String::Utf8Value plainTextVal(args[0]->ToString());
+            String::AsciiValue modulusVal(args[1]->ToString()), publicExpVal(args[2]->ToString());
+            std::string plainText(*plainTextVal), modulusStr(*modulusVal), publicExpStr(*publicExpVal), cipherText;
+            Local<Value> result;
+            //Encrypting the plainText
+            AutoSeededRandomPool prng;
+            RSAFunction publicParams;
+            publicParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr));
+            RSA::PublicKey publicKey(publicParams);
+            RSAES_OAEP_SHA_Encryptor encryptor(publicKey);
+            StringSource(plainText, true, new PK_EncryptorFilter(prng, encryptor, new StringSink(cipherText)));
+            result = String::New(strHexEncode(cipherText).c_str());
+            //Returning the result
+            if (args.Length() == 3){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[3]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -1142,27 +1248,32 @@ Handle<Value> rsaEncrypt(const Arguments& args){
 Handle<Value> rsaDecrypt(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 4 || args.Length() == 5){
-        //Casting arguments
-        String::AsciiValue cipherTextVal(args[0]->ToString()), modulusVal(args[1]->ToString()), privateExpVal(args[2]->ToString()), publicExpVal(args[3]->ToString());
-        std::string cipherText(*cipherTextVal), modulusStr(*modulusVal), privateExpStr(*privateExpVal), publicExpStr(*publicExpVal), plainText;
-        Local<Value> result = Local<Value>::New(Undefined());
-        //Decrypting cipherText
-        AutoSeededRandomPool prng;
-        InvertibleRSAFunction privateParams;
-        privateParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr), HexStrToInteger(privateExpStr));
-        RSA::PrivateKey privateKey(privateParams);
-        RSAES_OAEP_SHA_Decryptor decryptor(privateKey);
-        cipherText = strHexDecode(cipherText);
-        StringSource(cipherText, true, new PK_DecryptorFilter(prng, decryptor, new StringSink(plainText)));
-        result = String::New(plainText.c_str());
-        //Returning the result
-        if (args.Length() == 4){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[4]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+        try {
+            //Casting arguments
+            String::AsciiValue cipherTextVal(args[0]->ToString()), modulusVal(args[1]->ToString()), privateExpVal(args[2]->ToString()), publicExpVal(args[3]->ToString());
+            std::string cipherText(*cipherTextVal), modulusStr(*modulusVal), privateExpStr(*privateExpVal), publicExpStr(*publicExpVal), plainText;
+            Local<Value> result = Local<Value>::New(Undefined());
+            //Decrypting cipherText
+            AutoSeededRandomPool prng;
+            InvertibleRSAFunction privateParams;
+            privateParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr), HexStrToInteger(privateExpStr));
+            RSA::PrivateKey privateKey(privateParams);
+            RSAES_OAEP_SHA_Decryptor decryptor(privateKey);
+            cipherText = strHexDecode(cipherText);
+            StringSource(cipherText, true, new PK_DecryptorFilter(prng, decryptor, new StringSink(plainText)));
+            result = String::New(plainText.c_str());
+            //Returning the result
+            if (args.Length() == 4){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[4]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -1175,44 +1286,49 @@ Handle<Value> rsaDecrypt(const Arguments& args){
 Handle<Value> rsaSign(const Arguments& args){
     HandleScope scope;
     if (args.Length() >= 4 && args.Length() <= 6){
-        //Casting arguments
-        String::Utf8Value messageVal(args[0]->ToString());
-        String::AsciiValue modulusVal(args[1]->ToString()), privateExpVal(args[2]->ToString()), publicExpVal(args[3]->ToString());
-        std::string message(*messageVal), modulusStr(*modulusVal), privateExpStr(*privateExpVal), publicExpStr(*publicExpVal), signature, hashName = "";
-        //Casting the hashName argument
-        if (args.Length() >= 5){
-            if (!args[4]->IsUndefined()){
-                String::Utf8Value hashNameVal(args[4]->ToString());
-                hashName = std::string(*hashNameVal);
-                if (!(hashName == "sha1" || hashName == "sha256")){
-                    ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
-                    return scope.Close(Undefined());
+        try {
+            //Casting arguments
+            String::Utf8Value messageVal(args[0]->ToString());
+            String::AsciiValue modulusVal(args[1]->ToString()), privateExpVal(args[2]->ToString()), publicExpVal(args[3]->ToString());
+            std::string message(*messageVal), modulusStr(*modulusVal), privateExpStr(*privateExpVal), publicExpStr(*publicExpVal), signature, hashName = "";
+            //Casting the hashName argument
+            if (args.Length() >= 5){
+                if (!args[4]->IsUndefined()){
+                    String::Utf8Value hashNameVal(args[4]->ToString());
+                    hashName = std::string(*hashNameVal);
+                    if (!(hashName == "sha1" || hashName == "sha256")){
+                        ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
+                        return scope.Close(Undefined());
+                    }
                 }
             }
-        }
-        Local<Value> result = Local<Value>::New(Undefined());
-        //Signing the message
-        AutoSeededRandomPool prng;
-        InvertibleRSAFunction privateParams;
-        privateParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr), HexStrToInteger(privateExpStr));
-        RSA::PrivateKey privateKey(privateParams);
-        if (hashName == "" || hashName == "sha1"){
-            RSASS<PSS, SHA1>::Signer signer(privateKey);
-            StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
-        } else {
-            RSASS<PSS, SHA256>::Signer signer(privateKey);
-            StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
-        }
-        signature = strHexEncode(signature);
-        result = String::New(signature.c_str());
-        if (args.Length() < 6){
-            return scope.Close(result);
-        } else {
-            if (args[5]->IsUndefined()) return scope.Close(result);
-            Local<Function> callback = Local<Function>::Cast(args[5]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+            Local<Value> result = Local<Value>::New(Undefined());
+            //Signing the message
+            AutoSeededRandomPool prng;
+            InvertibleRSAFunction privateParams;
+            privateParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr), HexStrToInteger(privateExpStr));
+            RSA::PrivateKey privateKey(privateParams);
+            if (hashName == "" || hashName == "sha1"){
+                RSASS<PSS, SHA1>::Signer signer(privateKey);
+                StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
+            } else {
+                RSASS<PSS, SHA256>::Signer signer(privateKey);
+                StringSource(message, true, new SignerFilter(prng, signer, new StringSink(signature)));
+            }
+            signature = strHexEncode(signature);
+            result = String::New(signature.c_str());
+            if (args.Length() < 6){
+                return scope.Close(result);
+            } else {
+                if (args[5]->IsUndefined()) return scope.Close(result);
+                Local<Function> callback = Local<Function>::Cast(args[5]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -1225,42 +1341,47 @@ Handle<Value> rsaSign(const Arguments& args){
 Handle<Value> rsaVerify(const Arguments& args){
     HandleScope scope;
     if (args.Length() >= 4 || args.Length() <= 6){
-        //Casting parameters
-        String::Utf8Value messageVal(args[0]->ToString());
-        String::AsciiValue signatureVal(args[1]->ToString()), modulusVal(args[2]->ToString()), publicExpVal(args[3]->ToString());
-        std::string message(*messageVal), signature(*signatureVal), modulusStr(*modulusVal), publicExpStr(*publicExpVal), hashName = "";
-        signature = strHexDecode(signature);
-        if (args.Length() >= 5){
-            if (!args[4]->IsUndefined()){
-                String::Utf8Value hashNameVal(args[4]->ToString());
-                hashName = std::string(*hashNameVal);
-                if (!(hashName == "sha1" || hashName == "sha256")){
-                    ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
-                    return scope.Close(Undefined());
+        try {
+            //Casting parameters
+            String::Utf8Value messageVal(args[0]->ToString());
+            String::AsciiValue signatureVal(args[1]->ToString()), modulusVal(args[2]->ToString()), publicExpVal(args[3]->ToString());
+            std::string message(*messageVal), signature(*signatureVal), modulusStr(*modulusVal), publicExpStr(*publicExpVal), hashName = "";
+            signature = strHexDecode(signature);
+            if (args.Length() >= 5){
+                if (!args[4]->IsUndefined()){
+                    String::Utf8Value hashNameVal(args[4]->ToString());
+                    hashName = std::string(*hashNameVal);
+                    if (!(hashName == "sha1" || hashName == "sha256")){
+                        ThrowException(v8::Exception::TypeError(String::New("Invalid hash function name")));
+                        return scope.Close(Undefined());
+                    }
                 }
             }
-        }
-        //Verifying the signature
-        RSAFunction publicParams;
-        bool isValid = false;
-        publicParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr));
-        RSA::PublicKey publicKey(publicParams);
-        if (hashName == "" || hashName == "sha1"){
-            RSASS<PSS, SHA1>::Verifier verifier(publicKey);
-            StringSource(signature+message, true, new SignatureVerificationFilter(verifier, new ArraySink( (byte*)&isValid, sizeof(isValid) )));
-        } else {
-            RSASS<PSS, SHA256>::Verifier verifier(publicKey);
-            StringSource(signature+message, true, new SignatureVerificationFilter(verifier, new ArraySink( (byte*)&isValid, sizeof(isValid) )));
-        }
-        //Returning the result
-        if (args.Length() < 6){
-            return scope.Close(Boolean::New(isValid));
-        } else {
-            if (args[5]->IsUndefined()) return scope.Close(Boolean::New(isValid));
-            Local<Function> callback = Local<Function>::Cast(args[5]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(isValid)) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+            //Verifying the signature
+            RSAFunction publicParams;
+            bool isValid = false;
+            publicParams.Initialize(HexStrToInteger(modulusStr), HexStrToInteger(publicExpStr));
+            RSA::PublicKey publicKey(publicParams);
+            if (hashName == "" || hashName == "sha1"){
+                RSASS<PSS, SHA1>::Verifier verifier(publicKey);
+                StringSource(signature+message, true, new SignatureVerificationFilter(verifier, new ArraySink( (byte*)&isValid, sizeof(isValid) )));
+            } else {
+                RSASS<PSS, SHA256>::Verifier verifier(publicKey);
+                StringSource(signature+message, true, new SignatureVerificationFilter(verifier, new ArraySink( (byte*)&isValid, sizeof(isValid) )));
+            }
+            //Returning the result
+            if (args.Length() < 6){
+                return scope.Close(Boolean::New(isValid));
+            } else {
+                if (args[5]->IsUndefined()) return scope.Close(Boolean::New(isValid));
+                Local<Function> callback = Local<Function>::Cast(args[5]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(isValid)) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -1277,31 +1398,36 @@ Handle<Value> rsaVerify(const Arguments& args){
 Handle<Value> dsaGenerateKeyPair(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 1 || args.Length() == 2){
-        Local<Value> result;
+        try {
+            Local<Value> result;
 
-        Local<v8::Integer> keySizeVal = Local<v8::Integer>::Cast(args[0]);
-        int keySize = keySizeVal->Value();
+            Local<v8::Integer> keySizeVal = Local<v8::Integer>::Cast(args[0]);
+            int keySize = keySizeVal->Value();
 
-        AutoSeededRandomPool prng;
-        DSA::PrivateKey privateKey;
-        privateKey.GenerateRandomWithKeySize(prng, keySize);
-        DSA::PublicKey publicKey;
-        publicKey.AssignFrom(privateKey);
+            AutoSeededRandomPool prng;
+            DSA::PrivateKey privateKey;
+            privateKey.GenerateRandomWithKeySize(prng, keySize);
+            DSA::PublicKey publicKey;
+            publicKey.AssignFrom(privateKey);
 
-        Local<Object> keyPair = Object::New();
-        keyPair->Set(String::NewSymbol("primeField"), String::New(IntegerToHexStr(privateKey.GetGroupParameters().GetModulus()).c_str()));
-        keyPair->Set(String::NewSymbol("divider"), String::New(IntegerToHexStr(privateKey.GetGroupParameters().GetSubgroupOrder()).c_str()));
-        keyPair->Set(String::NewSymbol("base"), String::New(IntegerToHexStr(privateKey.GetGroupParameters().GetSubgroupGenerator()).c_str()));
-        keyPair->Set(String::NewSymbol("privateExponent"), String::New(IntegerToHexStr(privateKey.GetPrivateExponent()).c_str()));
-        keyPair->Set(String::NewSymbol("publicElement"), String::New(IntegerToHexStr(publicKey.GetPublicElement()).c_str()));
-        result = keyPair;
-        if (args.Length() == 1){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[1]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+            Local<Object> keyPair = Object::New();
+            keyPair->Set(String::NewSymbol("primeField"), String::New(IntegerToHexStr(privateKey.GetGroupParameters().GetModulus()).c_str()));
+            keyPair->Set(String::NewSymbol("divider"), String::New(IntegerToHexStr(privateKey.GetGroupParameters().GetSubgroupOrder()).c_str()));
+            keyPair->Set(String::NewSymbol("base"), String::New(IntegerToHexStr(privateKey.GetGroupParameters().GetSubgroupGenerator()).c_str()));
+            keyPair->Set(String::NewSymbol("privateExponent"), String::New(IntegerToHexStr(privateKey.GetPrivateExponent()).c_str()));
+            keyPair->Set(String::NewSymbol("publicElement"), String::New(IntegerToHexStr(publicKey.GetPublicElement()).c_str()));
+            result = keyPair;
+            if (args.Length() == 1){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[1]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -1314,29 +1440,34 @@ Handle<Value> dsaGenerateKeyPair(const Arguments& args){
 Handle<Value> dsaSign(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 5 || args.Length() == 6){
-        Local<Value> result;
+        try {
+            Local<Value> result;
 
-        String::Utf8Value messageVal(args[0]->ToString());
-        String::AsciiValue fieldPrimeVal(args[1]->ToString()), dividerVal(args[2]->ToString()), baseVal(args[3]->ToString()), privateExponentVal(args[4]);
-        std::string message(*messageVal), signature;
-        CryptoPP::Integer fieldPrime(HexStrToInteger(*fieldPrimeVal)), divider(HexStrToInteger(*dividerVal)), base(HexStrToInteger(*baseVal)), privateExponent(HexStrToInteger(*privateExponentVal));
+            String::Utf8Value messageVal(args[0]->ToString());
+            String::AsciiValue fieldPrimeVal(args[1]->ToString()), dividerVal(args[2]->ToString()), baseVal(args[3]->ToString()), privateExponentVal(args[4]);
+            std::string message(*messageVal), signature;
+            CryptoPP::Integer fieldPrime(HexStrToInteger(*fieldPrimeVal)), divider(HexStrToInteger(*dividerVal)), base(HexStrToInteger(*baseVal)), privateExponent(HexStrToInteger(*privateExponentVal));
 
-        DSA::PrivateKey privateKey;
-        privateKey.Initialize(fieldPrime, divider, base, privateExponent);
+            DSA::PrivateKey privateKey;
+            privateKey.Initialize(fieldPrime, divider, base, privateExponent);
 
-        AutoSeededRandomPool prng;
-        //DSA::Signer signer(privateKey);
-        StringSource(message, true, new SignerFilter(prng, DSA::Signer(privateKey), new StringSink(signature)));
-        signature = strHexEncode(signature);
-        result = String::New(signature.c_str());
+            AutoSeededRandomPool prng;
+            //DSA::Signer signer(privateKey);
+            StringSource(message, true, new SignerFilter(prng, DSA::Signer(privateKey), new StringSink(signature)));
+            signature = strHexEncode(signature);
+            result = String::New(signature.c_str());
 
-        if (args.Length() == 5){
-            return scope.Close(result);
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[5]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(result) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+            if (args.Length() == 5){
+                return scope.Close(result);
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[5]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(result) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
@@ -1349,26 +1480,31 @@ Handle<Value> dsaSign(const Arguments& args){
 Handle<Value> dsaVerify(const Arguments& args){
     HandleScope scope;
     if (args.Length() == 6 || args.Length() == 7){
-        String::Utf8Value messageVal(args[0]->ToString());
-        String::AsciiValue signatureVal(args[1]->ToString()), fieldPrimeVal(args[2]->ToString()), dividerVal(args[3]->ToString()), baseVal(args[4]->ToString()), publicElementVal(args[5]->ToString());
-        std::string message(*messageVal), signature(*signatureVal);
-        bool isValid = false;
-        Local<Value> result;
+        try {
+            String::Utf8Value messageVal(args[0]->ToString());
+            String::AsciiValue signatureVal(args[1]->ToString()), fieldPrimeVal(args[2]->ToString()), dividerVal(args[3]->ToString()), baseVal(args[4]->ToString()), publicElementVal(args[5]->ToString());
+            std::string message(*messageVal), signature(*signatureVal);
+            bool isValid = false;
+            Local<Value> result;
 
-        CryptoPP::Integer fieldPrime(HexStrToInteger(*fieldPrimeVal)), divider(HexStrToInteger(*dividerVal)), base(HexStrToInteger(*baseVal)), publicElement(HexStrToInteger(*publicElementVal));
+            CryptoPP::Integer fieldPrime(HexStrToInteger(*fieldPrimeVal)), divider(HexStrToInteger(*dividerVal)), base(HexStrToInteger(*baseVal)), publicElement(HexStrToInteger(*publicElementVal));
 
-        DSA::PublicKey publicKey;
-        publicKey.Initialize(fieldPrime, divider, base, publicElement);
+            DSA::PublicKey publicKey;
+            publicKey.Initialize(fieldPrime, divider, base, publicElement);
 
-        signature = strHexDecode(signature);
-        StringSource(signature+message, true, new SignatureVerificationFilter(DSA::Verifier(publicKey), new ArraySink( (byte*)&isValid, sizeof(isValid) )));
-        if (args.Length() == 6){
-            return scope.Close(Boolean::New(isValid));
-        } else {
-            Local<Function> callback = Local<Function>::Cast(args[6]);
-            const unsigned argc = 1;
-            Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(isValid)) };
-            callback->Call(Context::GetCurrent()->Global(), argc, argv);
+            signature = strHexDecode(signature);
+            StringSource(signature+message, true, new SignatureVerificationFilter(DSA::Verifier(publicKey), new ArraySink( (byte*)&isValid, sizeof(isValid) )));
+            if (args.Length() == 6){
+                return scope.Close(Boolean::New(isValid));
+            } else {
+                Local<Function> callback = Local<Function>::Cast(args[6]);
+                const unsigned argc = 1;
+                Local<Value> argv[argc] = { Local<Value>::New(Boolean::New(isValid)) };
+                callback->Call(Context::GetCurrent()->Global(), argc, argv);
+                return scope.Close(Undefined());
+            }
+        } catch (CryptoPP::Exception& e){
+            ThrowException(v8::Exception::Error(String::New(e.what())));
             return scope.Close(Undefined());
         }
     } else {
