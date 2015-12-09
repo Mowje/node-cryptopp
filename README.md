@@ -51,12 +51,13 @@ Note that I wanted to allow key encryption (ie, when saving then on disk). But i
 
 * By default, each method described could be given a callback. If no callback is given, the method's result is returned.
 * If you want to skip an optional parameter but want to define the parameter that follows it, then the skipped parameter **MUST** be set to `undefined`. Sorry if this seems to totally inconvenient
-* This library isn't well written in terms of error management (except the KeyRing class). If the app crashes or throws some strange exception, it is probably because you did something wrong (Thanks Captain Obvious) but in general it won't tell you what it is. Note that if you use a method with a callback, the errors will be thrown exactly like when you use the method without a callback
+* This library isn't well written in terms of error management (except the KeyRing class). If the app crashes or throws some strange exception, it is probably because you did something wrong (Thanks Captain Obvious) but in general it won't tell you what it is. Note that if you use a method with a callback, the errors will be thrown exactly like when you use the method without a callback (meaning: not through the callback)
 * The different ECC algorithms for which are (or will be) implemented here use standard elliptic curves, defined [here](http://www.secg.org/collateral/sec2_final.pdf). The related methods will have a "curveName" parameter, taken from the previously linked document, like "secp256r1" or "sect233k1". Beware, it is case-sensitive. Each party must use the same curve.
 * ECIES keypairs can be used in ECDSA and vice-versa! (as long as you use the same curve in both algorithms) [paper that proves it; look for section 4](http://eprint.iacr.org/2011/615)
 * You should not use ECDH or ECDSA on binary fields! There is a bug in the related methods that is not yet fixed. (probably in hexStr<->PolynomialMod2 versions, if you are more courageous than me and want to dig in)
-* You can choose what hash function want to use in ECDSA and RSA signatures. You can choose either SHA1 (default) or SHA256. Just set the `hashName` parameter to 'sha1' or 'sha256' in the corresponding methods. Note that the default hash function for these algorthims in version prior to v0.2.0 was SHA256.
+* You can choose what hash function want to use in ECDSA and RSA signatures. You can choose either SHA1 (default) or SHA256. Just set the `hashName` parameter to 'sha1' or 'sha256' in the corresponding methods. Note that the default hash function for these algorithms in version prior to v0.2.0 was SHA256.
 * Keys, ciphertexts and signatures are all hex encoded. These data types should be kept "as-is" when passed to other methods.
+* Crypto++ doesn't do well with fuzzed values (like ciphertexts, keys or signatures). Hence, unless you do value sanitizing of some sort, it seems like a bad idea to use this module in a server to check/validate/decrypt user-provided data (for example).
 
 ## Usage
 
