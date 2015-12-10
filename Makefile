@@ -17,7 +17,7 @@ cryptopp/GNUmakefile-cross:
 	git clone https://github.com/Mowje/cryptopp.git
 
 build: cryptopp/GNUmakefile-cross
-	cd cryptopp && make
+	cd cryptopp && make clean && make static
 	node-gyp rebuild
 
 rebuild: clean build
