@@ -25,4 +25,4 @@ rebuild: clean build
 test: build
 	cd cryptopp && make test
 	node test.js verbose
-	node keyManagerTest.js
+	node keyManagerTest.js verbose
