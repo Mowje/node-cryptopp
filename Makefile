@@ -14,6 +14,7 @@ git-pull:
 	cd cryptopp && git pull origin master
 
 cryptopp/GNUmakefile:
+	ls -al cryptopp
 	git clone https://github.com/Mowje/cryptopp.git
 
 build: cryptopp/GNUmakefile
