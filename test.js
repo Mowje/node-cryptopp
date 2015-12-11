@@ -65,6 +65,8 @@ var otherIsRsaSignValid = cryptopp.rsa.verify(rsaSignTest, rsaSignature, otherRs
 log('Is signature valid : ' + isRsaSignValid);
 assert.deepEqual(isRsaSignValid, true, 'The RSA signature is invalid');
 assert.deepEqual(otherIsRsaSignValid, false, 'RSA signatures do not work!');
+assert(typeof isRsaSignValid === 'boolean', 'The RSA signature verification result must be a boolean!');
+assert(typeof otherIsRsaSignValid === 'boolean', 'The RSA signature verification result must be a boolean!');
 //assert.deepEqual(fuzzingRsaValid, false, 'RSA signatures can spoofed with fuzzing!');
 
 if (useFuzzing){
@@ -111,6 +113,8 @@ var otherDsaIsValid = cryptopp.dsa.verify(dsaTest, dsaSignature, otherDsaKeyPair
 log("Is signature valid : " + dsaIsValid);
 assert.deepEqual(dsaIsValid, true, 'The DSA signature is invalid');
 assert.deepEqual(otherDsaIsValid, false, 'DSA signatures do not work!');
+assert(typeof dsaIsValid === 'boolean', 'The DSA signature verification result must be a boolean!');
+assert(typeof otherDsaIsValid === 'boolean', 'The DSA signature verification result must be a boolean!');
 //assert.deepEqual(fuzzingDsaValid, false, 'DSA signatures can be spoofed with fuzzing!');
 
 if (useFuzzing){
@@ -211,6 +215,8 @@ var ecdsaIsNotValid = cryptopp.ecdsa.prime.verify(ecdsaTest, ecdsaSignature, oth
 log("Is valid : " + ecdsaIsValid);
 assert.deepEqual(ecdsaIsValid, true, 'The ECDSA signature is invalid (prime fields)');
 assert.deepEqual(ecdsaIsNotValid, false, 'ECDSA signatures verification does not work!!!');
+assert(typeof ecdsaIsValid === 'boolean', 'The ECDSA signature verification result must be a boolean!');
+assert(typeof ecdsaIsNotValid === 'boolean', 'The ECDSA signature verification result must be a boolean!');
 //assert.deepEqual(fuzzingEcdsaValid, false, 'ECDSA signatures can be spoofed with fuzzing!');
 
 if (useFuzzing){
@@ -241,6 +247,7 @@ console.log('\n### Testing ECDSA signing and verification on binary fields ###\n
 ecdsaSignature = cryptopp.ecdsa.binary.sign(ecdsaTest, ecdsaKeyPair.privateKey, 'sect283r1');
 console.log('Signature : ' + ecdsaSignature);
 ecdsaIsValid = cryptopp.ecdsa.binary.verify(ecdsaTest, ecdsaSignature, ecdsaKeyPair.publicKey, 'sect283r1');
+assert(typeof ecdsaIsValid === 'boolean', 'The ECDSA signature verification result must be a boolean!');
 console.log('Is valid : ' + ecdsaIsValid);*/
 
 //Testing ECDH key agreement protocol on prime fields
