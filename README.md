@@ -37,7 +37,8 @@ If you want to use a specific version of this module (let's say v0.2.4), you sho
 
 *NOTE*: This module used to be installable from npmjs.org. I struggled to make it work with 0.2.1. So I'm giving up on npm for now and gave you this alternate way to install cryptopp.
 
-## CAUTION : minor API changes starting from v.0.2.0
+## CAUTION : Do not use node-cryptopp v0.2.3 and prior to check signatures!!!
+[Click here to see why](https://gist.github.com/BatikhSouri/b4b76d2f4d0cd5e532f0)
 
 ## Use the `KeyRing` !
 
