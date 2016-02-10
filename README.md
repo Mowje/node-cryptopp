@@ -1,6 +1,8 @@
 # node-cryptopp
 
-Node.js module that statically binds and simplifies the usage of the [Crypto++](http://cryptopp.com) comprehensive cryptography library.
+__This module is not currently maintained. It was known to have [faults](https://gist.github.com/BatikhSouri/b4b76d2f4d0cd5e532f0). It hasn't been tested with test vectors. USE AT YOUR OWN RISK!__
+
+Node.js module that statically binds and simplifies the usage of the [Crypto++](http://cryptopp.com) comprehensive cryptography library. (Written for Node.js v0.10.x)
 
 Bindings for:
 * [RSA](https://en.wikipedia.org/wiki/RSA_%28algorithm%29)
